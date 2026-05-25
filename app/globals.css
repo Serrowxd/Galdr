@@ -85,6 +85,11 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Scales rem-based Tailwind + custom rem sizes; % preserves UA font-size prefs */
+  font-size: 87.5%;
+}
+
 html,
 body {
   margin: 0;
@@ -2273,6 +2278,86 @@ select.loom-report-control {
 
 .username-btn-spinner {
   animation: pulse 0.9s ease infinite;
+}
+
+.connected-account-modal {
+  max-width: 28rem;
+}
+
+.connected-account-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.connected-account-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.connected-account-copy {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.connected-account-current {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 0.85rem;
+}
+
+.connected-account-provider {
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.connected-account-email {
+  font-size: 0.85rem;
+}
+
+.connected-account-status {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.connected-account-status.is-verified {
+  color: var(--accent);
+}
+
+.connected-account-error {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #ff8a80;
+}
+
+.connected-account-change {
+  align-self: flex-start;
+}
+
+.connected-account-picker-label {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.connected-account-provider-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.connected-account-provider-btn {
+  width: 100%;
+  justify-content: center;
 }
 
 /* Brutalist / Neo-gothic base overrides */

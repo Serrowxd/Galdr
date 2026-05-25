@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { SignInButton, useAuth } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
 import {
   Bookmark,
   ChevronRight,
@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 
+import { GaldrSignInButton } from "@/components/GaldrSignInButton";
 import { renderMarkdownPreview } from "@/lib/markdownPreview";
 import type { Stave } from "@/lib/mockData";
 import type { StavePackageFile } from "@/lib/stavePackages";
@@ -398,11 +399,11 @@ export function StaveDetailClient({
 
         {isLoaded && !isSignedIn ? (
           <p className="muted">
-            <SignInButton mode="modal">
+            <GaldrSignInButton>
               <button type="button" className="btn-ghost-sm">
                 Sign in
               </button>
-            </SignInButton>{" "}
+            </GaldrSignInButton>{" "}
             to vote, save, or comment.
           </p>
         ) : null}

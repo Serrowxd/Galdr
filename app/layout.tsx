@@ -3,7 +3,9 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { ui } from "@clerk/ui";
 import { JetBrains_Mono } from "next/font/google";
 import { NavBar } from "@/components/NavBar";
+import { OAuthSwapHandler } from "@/components/ConnectedAccountPanel";
 import { UsernameOnboardingModal } from "@/components/UsernameOnboardingModal";
+import { clerkAppearance } from "@/lib/clerkAuth";
 import "./globals.css";
 
 const jetBrainsMono = JetBrains_Mono({
@@ -30,10 +32,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider ui={ui}>
+    <ClerkProvider ui={ui} appearance={clerkAppearance}>
       <html lang="en">
         <body className={jetBrainsMono.variable}>
           <NavBar />
+          <OAuthSwapHandler />
           <UsernameOnboardingModal />
           <main className="app-shell">{children}</main>
         </body>

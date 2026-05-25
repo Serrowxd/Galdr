@@ -5,10 +5,13 @@ import { ChevronDown } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
+import { ConnectedAccountPanel } from "@/components/ConnectedAccountPanel";
+
 export function UserAccountMenu() {
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
   const [open, setOpen] = useState(false);
+  const [accountPanelOpen, setAccountPanelOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,69 +56,101 @@ export function UserAccountMenu() {
   const avatarInitial = Array.from(label.trim())[0];
 
   return (
-    <div className="topbar-user-menu" ref={rootRef}>
-      <button
-        type="button"
-        className="topbar-user-trigger"
-        aria-expanded={open}
-        aria-haspopup="menu"
-        aria-controls="topbar-user-dropdown"
-        id="topbar-user-trigger"
-        aria-label={`Account menu, signed in as ${label}`}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {avatarUrl ? (
-          <Image
-            className="topbar-user-avatar"
-            src={avatarUrl}
-            alt=""
-            width={26}
-            height={26}
-            unoptimized
-          />
-        ) : (
-          <span className="topbar-user-avatar-placeholder" aria-hidden>
-            {avatarInitial ? avatarInitial.toUpperCase() : "?"}
-          </span>
-        )}
-        <span className="topbar-user-name">{label}</span>
-        <ChevronDown
-          size={14}
-          className={`topbar-user-chevron ${open ? "is-open" : ""}`}
-          aria-hidden
-        />
-      </button>
-
-      {open ? (
-        <div
-          className="topbar-user-dropdown"
-          id="topbar-user-dropdown"
-          role="menu"
-          aria-labelledby="topbar-user-trigger"
+    <>
+      <div className="topbar-user-menu" ref={rootRef}>
+        <button
+          type="button"
+          className="topbar-user-trigger"
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-controls="topbar-user-dropdown"
+          id="topbar-user-trigger"
+          aria-label={`Account menu, signed in as ${label}`}
+          onClick={() => setOpen((v) => !v)}
         >
-          <button type="button" className="topbar-user-menu-item" role="menuitem">
-            Profile <span className="topbar-user-placeholder-tag">soon</span>
-          </button>
-          <button type="button" className="topbar-user-menu-item" role="menuitem">
-            Invocations ledger <span className="topbar-user-placeholder-tag">soon</span>
-          </button>
-          <button type="button" className="topbar-user-menu-item" role="menuitem">
-            API keys <span className="topbar-user-placeholder-tag">soon</span>
-          </button>
-          <div className="topbar-user-menu-divider" role="presentation" />
-          <button
-            type="button"
-            className="topbar-user-menu-item topbar-user-menu-item-signout"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              void signOut({ redirectUrl: "/" });
-            }}
+          {avatarUrl ? (
+            <Image
+              className="topbar-user-avatar"
+              src={avatarUrl}
+              alt=""
+              width={26}
+              height={26}
+              unoptimized
+            />
+          ) : (
+            <span className="topbar-user-avatar-placeholder" aria-hidden>
+              {avatarInitial ? avatarInitial.toUpperCase() : "?"}
+            </span>
+          )}
+          <span className="topbar-user-name">{label}</span>
+          <ChevronDown
+            size={14}
+            className={`topbar-user-chevron ${open ? "is-open" : ""}`}
+            aria-hidden
+          />
+        </button>
+
+        {open ? (
+          <div
+            className="topbar-user-dropdown"
+            id="topbar-user-dropdown"
+            role="menu"
+            aria-labelledby="topbar-user-trigger"
           >
-            Sign out
-          </button>
+            <button
+              type="button"
+              className="topbar-user-menu-item"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                setAccountPanelOpen(true);
+              }}
+            >
+              Connected account
+            </button>
+            <button type="button" className="topbar-user-menu-item" role="menuitem">
+              Invocations ledger <span className="topbar-user-placeholder-tag">soon</span>
+            </button>
+            <button type="button" className="topbar-user-menu-item" role="menuitem">
+              API keys <span className="topbar-user-placeholder-tag">soon</span>
+            </button>
+            <div className="topbar-user-menu-divider" role="presentation" />
+            <button
+              type="button"
+              className="topbar-user-menu-item topbar-user-menu-item-signout"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                void signOut({ redirectUrl: "/" });
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      {accountPanelOpen ? (
+        <div
+          className="username-modal-backdrop"
+          role="presentation"
+          onClick={() => setAccountPanelOpen(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setAccountPanelOpen(false);
+          }}
+        >
+          <div
+            className="username-modal-panel frame connected-account-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="connected-account-title"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <ConnectedAccountPanel onClose={() => setAccountPanelOpen(false)} />
+          </div>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }

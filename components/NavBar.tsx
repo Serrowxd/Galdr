@@ -1,11 +1,12 @@
 "use client";
 
-import { SignInButton, useAuth } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { Menu } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import { GaldrSignInButton } from "@/components/GaldrSignInButton";
 import {
   Sheet,
   SheetContent,
@@ -109,11 +110,11 @@ export function NavBar() {
           ) : isSignedIn ? (
             <UserAccountMenu />
           ) : (
-            <SignInButton mode="modal">
+            <GaldrSignInButton>
               <button type="button" className="btn-ghost-sm">
                 Sign in
               </button>
-            </SignInButton>
+            </GaldrSignInButton>
           )}
         </div>
       </div>

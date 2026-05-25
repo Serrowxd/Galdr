@@ -1,9 +1,6 @@
-import { SignUp } from "@clerk/nextjs";
+import { redirect } from "next/navigation";
 
+/** First-time sign-up happens via OAuth in the sign-in modal. */
 export default function SignUpPage() {
-  return (
-    <section className="container page-block auth-panel">
-      <SignUp routing="path" path="/sign-up" signInUrl="/sign-in" />
-    </section>
-  );
+  redirect("/");
 }
