@@ -2133,6 +2133,145 @@ textarea {
 }
 
 /* =====================================================================
+ * Profile settings
+ * ===================================================================== */
+
+.profile-panel {
+  display: grid;
+  gap: 32px;
+}
+
+.profile-subsection {
+  display: grid;
+  gap: 18px;
+}
+
+.profile-subsection + .profile-subsection {
+  padding-top: 28px;
+  border-top: 0.5px solid var(--hairline);
+}
+
+.profile-subsection-title {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+/* Fields sit in a responsive grid so they spread side by side on wider
+ * viewports and collapse to a single column when space is tight. */
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px 20px;
+  align-items: start;
+}
+
+/* A field group keeps a label + control + hint together as one grid cell. */
+.profile-field-group {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.profile-col-full {
+  grid-column: 1 / -1;
+}
+
+/* Field label + control + hint travel together with tight internal spacing. */
+.profile-field {
+  gap: 8px;
+}
+
+.profile-field .input,
+.profile-bio-input {
+  padding: 11px 13px;
+}
+
+.profile-bio-input {
+  resize: vertical;
+  min-height: 92px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.profile-bio-count {
+  text-align: right;
+  margin-top: -8px;
+}
+
+.profile-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.profile-avatar,
+.profile-avatar-fallback {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 0.5px solid var(--hairline);
+  flex-shrink: 0;
+}
+
+.profile-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+}
+
+.profile-avatar-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.profile-password-form {
+  display: grid;
+  gap: 10px;
+  max-width: 420px;
+}
+
+.profile-reset-link {
+  justify-self: start;
+}
+
+.identity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.identity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--hairline);
+  border-radius: 8px;
+}
+
+.identity-provider {
+  font-size: 13px;
+}
+
+.identity-connect {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* =====================================================================
  * Footer
  * ===================================================================== */
 

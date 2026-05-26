@@ -15,8 +15,22 @@ type UserAccountMenuProps = {
 
 export function UserAccountMenu({ user }: UserAccountMenuProps) {
   const [open, setOpen] = useState(false);
+  const [profileUsername, setProfileUsername] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const res = await fetch("/api/profile", { credentials: "include" });
+      if (!active || !res.ok) return;
+      const data = (await res.json()) as { username?: string | null };
+      setProfileUsername(data.username ?? null);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -37,6 +51,7 @@ export function UserAccountMenu({ user }: UserAccountMenuProps) {
   const email = user.email ?? "";
   const emailLocal = email.split("@")[0] ?? "";
   const label =
+    profileUsername ??
     (user.user_metadata?.preferred_username as string | undefined) ??
     (user.user_metadata?.user_name as string | undefined) ??
     emailLocal ??
