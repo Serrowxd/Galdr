@@ -1,20 +1,40 @@
 import type { Metadata } from "next";
-import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { User } from "@supabase/supabase-js";
 
 import { StaveCard } from "@/components/StaveCard";
 import { getDbOptional } from "@/db";
 import { userProfiles } from "@/db/schema";
-import {
-  grimoireSlugFromUsername,
-  normalizeGrimoirePathSlug,
-} from "@/lib/grimoireSlug";
+import { normalizeGrimoirePathSlug } from "@/lib/grimoireSlug";
 import type { Stave } from "@/lib/mockData";
 import { createClient } from "@/lib/supabase/server";
 import { getDistinctScribeSlugs, getStavesByScribeSlug } from "@/lib/staves";
+
+/** Public profile fields looked up by username slug (case-insensitive). */
+type ProfileRow = {
+  userId: string;
+  username: string;
+  bio: string | null;
+  avatarUrl: string | null;
+};
+
+async function findProfileBySlug(slug: string): Promise<ProfileRow | null> {
+  const db = getDbOptional();
+  if (!db) return null;
+  const [row] = await db
+    .select({
+      userId: userProfiles.userId,
+      username: userProfiles.username,
+      bio: userProfiles.bio,
+      avatarUrl: userProfiles.avatarUrl,
+    })
+    .from(userProfiles)
+    .where(sql`lower(${userProfiles.username}) = ${slug}`)
+    .limit(1);
+  return row ?? null;
+}
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -36,28 +56,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { title: "Grimoire | Galdr" };
-
-  const db = getDbOptional();
-  let username: string | null = null;
-  if (db) {
-    const [profile] = await db
-      .select({ username: userProfiles.username })
-      .from(userProfiles)
-      .where(eq(userProfiles.userId, user.id))
-      .limit(1);
-    username = profile?.username ?? null;
-  }
-
-  const ownerSlug = username ? grimoireSlugFromUsername(username) : null;
-  if (ownerSlug === slug && username) {
+  const profile = await findProfileBySlug(slug);
+  if (profile) {
     return {
-      title: `${username} · Grimoire | Galdr`,
-      description: `Staves authored by ${username}.`,
+      title: `${profile.username} · Grimoire | Galdr`,
+      description: `Staves authored by ${profile.username}.`,
     };
   }
 
@@ -74,27 +77,26 @@ export default async function GrimoireSlugPage({ params }: PageProps) {
     return <FilledGrimoire authored={authored} />;
   }
 
+  // Real user profiles are public: anyone can view a scribe's grimoire by slug.
+  const profile = await findProfileBySlug(slug);
+  if (!profile) notFound();
+
+  // The signed-in owner gets owner-specific framing/CTAs; the avatar itself is
+  // public (mirrored onto the profile row) so every visitor sees the same one.
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) notFound();
+  const isOwner = user?.id === profile.userId;
 
-  const db = getDbOptional();
-  let username: string | null = null;
-  if (db) {
-    const [profile] = await db
-      .select({ username: userProfiles.username })
-      .from(userProfiles)
-      .where(eq(userProfiles.userId, user.id))
-      .limit(1);
-    username = profile?.username ?? null;
-  }
-
-  const ownerSlug = username ? grimoireSlugFromUsername(username) : null;
-  if (ownerSlug !== slug) notFound();
-
-  return <EmptyOwnerGrimoire user={user} username={username} />;
+  return (
+    <ProfileGrimoire
+      username={profile.username}
+      bio={profile.bio}
+      avatarUrl={profile.avatarUrl}
+      isOwner={isOwner}
+    />
+  );
 }
 
 function FilledGrimoire({ authored }: { authored: Stave[] }) {
@@ -169,20 +171,18 @@ function FilledGrimoire({ authored }: { authored: Stave[] }) {
   );
 }
 
-function EmptyOwnerGrimoire({
-  user,
+function ProfileGrimoire({
   username,
+  bio,
+  avatarUrl,
+  isOwner,
 }: {
-  user: User;
-  username: string | null;
+  username: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  isOwner: boolean;
 }) {
-  const displayName =
-    username ??
-    (user.user_metadata?.name as string | undefined) ??
-    user.email?.split("@")[0] ??
-    "Scribe";
-
-  const t = displayName.trim();
+  const t = username.trim();
   const initials =
     t.length >= 2
       ? t.slice(0, 2).toUpperCase()
@@ -190,16 +190,14 @@ function EmptyOwnerGrimoire({
         ? (t + t).toUpperCase()
         : "?";
 
-  const imageUrl = user.user_metadata?.avatar_url as string | undefined;
-
   return (
     <>
       <div className="container">
         <article className="profile-head">
-          {imageUrl ? (
+          {avatarUrl ? (
             <Image
               className="profile-avatar-img"
-              src={imageUrl}
+              src={avatarUrl}
               alt=""
               width={64}
               height={64}
@@ -212,9 +210,10 @@ function EmptyOwnerGrimoire({
           )}
           <div className="profile-meta">
             <p className="page-hero-tag" style={{ marginBottom: 4 }}>
-              Your grimoire
+              {isOwner ? "Your grimoire" : "Scribe"}
             </p>
-            <h1 className="profile-name">{displayName}</h1>
+            <h1 className="profile-name">{username}</h1>
+            {bio ? <p className="profile-sub">{bio}</p> : null}
             <p className="profile-sub">0 staves in registry</p>
           </div>
         </article>
@@ -247,25 +246,37 @@ function EmptyOwnerGrimoire({
         <div style={{ paddingTop: 20, paddingBottom: 32 }}>
           <article className="empty-state">
             <h2>No staves yet</h2>
-            <p>
-              Nothing tied to your username appears in the demo registry. Browse
-              existing work or draft something new in the Loom.
-            </p>
-            <div className="empty-state-actions">
-              <Link href="/" className="btn btn-soft btn-sm">
-                Browse registry
-              </Link>
-              <Link href="/loom" className="btn btn-primary btn-sm">
-                Open the Loom
-              </Link>
-            </div>
+            {isOwner ? (
+              <>
+                <p>
+                  Nothing tied to your username appears in the demo registry.
+                  Browse existing work or draft something new in the Loom.
+                </p>
+                <div className="empty-state-actions">
+                  <Link href="/" className="btn btn-soft btn-sm">
+                    Browse registry
+                  </Link>
+                  <Link href="/loom" className="btn btn-primary btn-sm">
+                    Open the Loom
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <p>{username} hasn&apos;t published any staves yet.</p>
+            )}
           </article>
         </div>
 
         <p className="muted" style={{ padding: "8px 0 24px" }}>
-          <Link href="/library">← Your library</Link>
-          <span aria-hidden> · </span>
-          <Link href="/">Registry</Link>
+          {isOwner ? (
+            <>
+              <Link href="/library">← Your library</Link>
+              <span aria-hidden> · </span>
+              <Link href="/">Registry</Link>
+            </>
+          ) : (
+            <Link href="/">← Back to Registry</Link>
+          )}
         </p>
       </div>
 
