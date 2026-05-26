@@ -36,7 +36,8 @@ export default function LandingPage() {
   const filteredStaves = useMemo(() => {
     const lowered = query.trim().toLowerCase();
     const category = FILTER_CATEGORIES.find((c) => c.id === activeFilter);
-    const categoryTags = category && "tags" in category ? category.tags : null;
+    const categoryTags: readonly string[] | null =
+      category && "tags" in category ? category.tags : null;
 
     return staves
       .filter((stave) => {

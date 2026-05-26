@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -13,6 +13,14 @@ const DEBOUNCE_MS = 400;
 type Availability = "idle" | "loading" | "available" | "taken" | "error";
 
 export default function SignUpPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignUpPageInner />
+    </Suspense>
+  );
+}
+
+function SignUpPageInner() {
   const searchParams = useSearchParams();
   const next = safeNext(searchParams.get("next"));
 

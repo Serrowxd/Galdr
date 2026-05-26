@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +15,14 @@ const PROVIDERS: { id: Provider; label: string }[] = [
 ];
 
 export default function SignInPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignInPageInner />
+    </Suspense>
+  );
+}
+
+function SignInPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = safeNext(searchParams.get("next"));

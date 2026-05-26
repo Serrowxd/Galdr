@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -8,6 +8,14 @@ import { safeNext } from "@/lib/auth/safeNext";
 import { VegvisirLogo } from "@/components/VegvisirLogo";
 
 export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={null}>
+      <ForgotPasswordPageInner />
+    </Suspense>
+  );
+}
+
+function ForgotPasswordPageInner() {
   const searchParams = useSearchParams();
   const next = safeNext(searchParams.get("next"));
 
