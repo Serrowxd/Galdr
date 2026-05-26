@@ -191,7 +191,8 @@ export function ProfileSettings() {
 
       const supabase = createClient();
       const ext = (prepared.name.split(".").pop() ?? "webp").toLowerCase();
-      const path = `${userId}/avatar-${Date.now()}.${ext}`;
+      const fileName = `avatar-${Date.now()}.${ext}`;
+      const path = `${userId}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
@@ -211,10 +212,48 @@ export function ProfileSettings() {
       });
       if (updateError) throw updateError;
 
+      // Drop any previous avatars so a user's folder holds only the current one.
+      await removeAvatarFiles(supabase, fileName);
+
       setAvatarUrl(publicUrl);
     } catch (err) {
       setAvatarError(
         err instanceof Error ? err.message : "Could not upload picture.",
+      );
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function removeAvatarFiles(
+    supabase: ReturnType<typeof createClient>,
+    excludeName?: string,
+  ) {
+    if (!userId) return;
+    const { data: files } = await supabase.storage.from("avatars").list(userId);
+    const toRemove = (files ?? [])
+      .filter((f) => f.name !== excludeName)
+      .map((f) => `${userId}/${f.name}`);
+    if (toRemove.length) {
+      await supabase.storage.from("avatars").remove(toRemove);
+    }
+  }
+
+  async function handleRemoveAvatar() {
+    if (!userId) return;
+    setAvatarError(null);
+    setAvatarBusy(true);
+    try {
+      const supabase = createClient();
+      await removeAvatarFiles(supabase);
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: { avatar_url: null },
+      });
+      if (updateError) throw updateError;
+      setAvatarUrl(null);
+    } catch (err) {
+      setAvatarError(
+        err instanceof Error ? err.message : "Could not remove picture.",
       );
     } finally {
       setAvatarBusy(false);
@@ -262,8 +301,18 @@ export function ProfileSettings() {
                   disabled={avatarBusy}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  {avatarBusy ? "Uploading…" : avatarUrl ? "Change picture" : "Upload picture"}
+                  {avatarBusy ? "Working…" : avatarUrl ? "Change picture" : "Upload picture"}
                 </button>
+                {avatarUrl ? (
+                  <button
+                    type="button"
+                    className="btn btn-soft btn-sm"
+                    disabled={avatarBusy}
+                    onClick={() => void handleRemoveAvatar()}
+                  >
+                    Remove
+                  </button>
+                ) : null}
               </div>
             </div>
             {avatarError ? (
