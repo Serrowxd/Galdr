@@ -3,8 +3,10 @@
 -- the app uses; bucket + policies live in the `storage` schema).
 --
 -- Files are stored as "<auth-user-id>/avatar-<timestamp>.<ext>" so each user can
--- only write inside their own folder. The bucket is public-read so avatar URLs
--- work in <img> tags without signed URLs.
+-- only write inside their own folder. The bucket is public, so the
+-- /object/public/... URLs work in <img> tags without any SELECT policy or signed
+-- URLs. We deliberately do NOT add a broad SELECT policy: it isn't needed for URL
+-- access and would let anyone list the bucket (enumerating every user's id).
 
 -- 1. Create (or update) the bucket with a hard size limit + image-only MIME types.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -21,10 +23,9 @@ on conflict (id) do update set
   allowed_mime_types = excluded.allowed_mime_types;
 
 -- 2. Row-level security policies on storage.objects, scoped to the avatars bucket.
+-- No SELECT policy: public buckets serve objects without one, and adding a broad
+-- read policy would expose a listing of every file (and thus every user id).
 drop policy if exists "Avatar images are publicly readable" on storage.objects;
-create policy "Avatar images are publicly readable"
-  on storage.objects for select
-  using (bucket_id = 'avatars');
 
 drop policy if exists "Users can upload their own avatar" on storage.objects;
 create policy "Users can upload their own avatar"
