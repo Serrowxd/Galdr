@@ -28,14 +28,19 @@ export async function GET(request: Request) {
 
   const candidate = validated.value;
 
-  // Case-insensitive exact match, excluding the requesting user's own profile
-  const [conflict] = await db
-    .select({ userId: userProfiles.userId })
-    .from(userProfiles)
-    .where(
-      sql`lower(${userProfiles.username}) = lower(${candidate}) AND ${userProfiles.userId} != ${user.id}`,
-    )
-    .limit(1);
+  try {
+    // Case-insensitive exact match, excluding the requesting user's own profile
+    const [conflict] = await db
+      .select({ userId: userProfiles.userId })
+      .from(userProfiles)
+      .where(
+        sql`lower(${userProfiles.username}) = lower(${candidate}) AND ${userProfiles.userId} != ${user.id}`,
+      )
+      .limit(1);
 
-  return NextResponse.json({ available: !conflict });
+    return NextResponse.json({ available: !conflict });
+  } catch (err) {
+    console.error("username availability check failed", err);
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  }
 }

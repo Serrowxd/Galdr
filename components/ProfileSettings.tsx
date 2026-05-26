@@ -4,6 +4,7 @@ import { Check, Loader2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
+import { readJson } from "@/lib/http";
 import { validateUsernameInput } from "@/lib/clerkUsername";
 import { BIO_MAX_LENGTH } from "@/lib/auth/claimUsername";
 import { compressImageToMax } from "@/lib/image/compressImage";
@@ -59,10 +60,10 @@ export function ProfileSettings() {
       );
 
       if (profileRes.ok) {
-        const data = (await profileRes.json()) as {
+        const data = await readJson<{
           username?: string | null;
           bio?: string | null;
-        };
+        }>(profileRes);
         const u = data.username ?? "";
         const b = data.bio ?? "";
         setUsername(u);
@@ -138,7 +139,7 @@ export function ProfileSettings() {
         body: JSON.stringify({ username: validation.value, bio }),
       });
       if (!res.ok) {
-        const data = (await res.json()) as { error?: string; collision?: boolean };
+        const data = await readJson<{ error?: string; collision?: boolean }>(res);
         if (data.collision) setAvailability("taken");
         throw new Error(data.error ?? "Could not save profile.");
       }

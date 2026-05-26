@@ -24,11 +24,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
   }
 
-  const [conflict] = await db
-    .select({ userId: userProfiles.userId })
-    .from(userProfiles)
-    .where(sql`lower(${userProfiles.username}) = lower(${validated.value})`)
-    .limit(1);
+  try {
+    const [conflict] = await db
+      .select({ userId: userProfiles.userId })
+      .from(userProfiles)
+      .where(sql`lower(${userProfiles.username}) = lower(${validated.value})`)
+      .limit(1);
 
-  return NextResponse.json({ available: !conflict, valid: true });
+    return NextResponse.json({ available: !conflict, valid: true });
+  } catch (err) {
+    console.error("username availability (public) check failed", err);
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  }
 }

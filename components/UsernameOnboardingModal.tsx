@@ -3,6 +3,7 @@
 import { Check, Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { readJson } from "@/lib/http";
 import {
   ensureValidSuggestionShape,
   normalizeEmailLocalPartToSuggestion,
@@ -38,7 +39,7 @@ export function UsernameOnboardingModal() {
         `/api/username/check?uid=${encodeURIComponent(u.id)}`,
       );
       if (res.ok) {
-        const data = (await res.json()) as { hasUsername?: boolean };
+        const data = await readJson<{ hasUsername?: boolean }>(res);
         setHasUsername(data.hasUsername ?? false);
       } else {
         setHasUsername(false);
@@ -91,7 +92,7 @@ function UsernameOnboardingForm({
           setAvailability("error");
           return;
         }
-        const data = (await res.json()) as { available?: boolean };
+        const data = await readJson<{ available?: boolean }>(res);
         setAvailability(data.available ? "available" : "taken");
       } catch {
         if (availSeq.current !== seq) return;
@@ -113,7 +114,7 @@ function UsernameOnboardingForm({
         body: JSON.stringify({ username: candidate }),
       });
       if (res.ok) return;
-      const data = (await res.json()) as { error?: string; collision?: boolean };
+      const data = await readJson<{ error?: string; collision?: boolean }>(res);
       if (data.collision && i < COLLISION_ATTEMPTS - 1) {
         candidate = withRandomCollisionSuffix(desired);
         continue;

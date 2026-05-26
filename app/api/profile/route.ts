@@ -18,16 +18,21 @@ export async function GET() {
     return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
   }
 
-  const [profile] = await db
-    .select({ username: userProfiles.username, bio: userProfiles.bio })
-    .from(userProfiles)
-    .where(eq(userProfiles.userId, user.id))
-    .limit(1);
+  try {
+    const [profile] = await db
+      .select({ username: userProfiles.username, bio: userProfiles.bio })
+      .from(userProfiles)
+      .where(eq(userProfiles.userId, user.id))
+      .limit(1);
 
-  return NextResponse.json({
-    username: profile?.username ?? null,
-    bio: profile?.bio ?? null,
-  });
+    return NextResponse.json({
+      username: profile?.username ?? null,
+      bio: profile?.bio ?? null,
+    });
+  } catch (err) {
+    console.error("profile load failed", err);
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  }
 }
 
 export async function PATCH(request: Request) {
@@ -54,13 +59,18 @@ export async function PATCH(request: Request) {
   const username = typeof body.username === "string" ? body.username : "";
   const bio = typeof body.bio === "string" ? body.bio : "";
 
-  const result = await claimUsername(db, user.id, username, bio);
-  if (!result.ok) {
-    if (result.reason === "collision") {
-      return NextResponse.json({ error: "Username taken.", collision: true }, { status: 409 });
+  try {
+    const result = await claimUsername(db, user.id, username, bio);
+    if (!result.ok) {
+      if (result.reason === "collision") {
+        return NextResponse.json({ error: "Username taken.", collision: true }, { status: 409 });
+      }
+      return NextResponse.json({ error: result.message }, { status: 400 });
     }
-    return NextResponse.json({ error: result.message }, { status: 400 });
-  }
 
-  return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("profile save failed", err);
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  }
 }

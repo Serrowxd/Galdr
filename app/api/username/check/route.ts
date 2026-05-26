@@ -18,11 +18,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ hasUsername: false });
   }
 
-  const [profile] = await db
-    .select({ username: userProfiles.username })
-    .from(userProfiles)
-    .where(eq(userProfiles.userId, user.id))
-    .limit(1);
+  try {
+    const [profile] = await db
+      .select({ username: userProfiles.username })
+      .from(userProfiles)
+      .where(eq(userProfiles.userId, user.id))
+      .limit(1);
 
-  return NextResponse.json({ hasUsername: Boolean(profile?.username) });
+    return NextResponse.json({ hasUsername: Boolean(profile?.username) });
+  } catch (err) {
+    console.error("username check failed", err);
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  }
 }
