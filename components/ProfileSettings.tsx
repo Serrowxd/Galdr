@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 import { readJson } from "@/lib/http";
-import { validateUsernameInput } from "@/lib/clerkUsername";
+import { validateUsernameInput } from "@/lib/username";
 import { BIO_MAX_LENGTH } from "@/lib/auth/claimUsername";
 import { compressImageToMax } from "@/lib/image/compressImage";
 import { ProfilePasswordSection } from "@/components/ProfilePasswordSection";
@@ -159,6 +159,8 @@ export function ProfileSettings() {
   const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
   // Cap the source we'll attempt to decode/compress, to avoid huge memory spikes.
   const AVATAR_SOURCE_LIMIT = 25 * 1024 * 1024;
+  // Must match the avatars bucket's allowed_mime_types (supabase/avatars_storage.sql).
+  const AVATAR_ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 
   async function handleAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -166,8 +168,8 @@ export function ProfileSettings() {
     if (!file || !userId) return;
 
     setAvatarError(null);
-    if (!file.type.startsWith("image/")) {
-      setAvatarError("Please choose an image file.");
+    if (!AVATAR_ALLOWED_TYPES.includes(file.type)) {
+      setAvatarError("Please choose a PNG, JPG, WebP, or GIF image.");
       return;
     }
     if (file.size > AVATAR_SOURCE_LIMIT) {
@@ -298,7 +300,7 @@ export function ProfileSettings() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
                     hidden
                     onChange={(e) => void handleAvatarFile(e)}
                   />
@@ -353,9 +355,7 @@ export function ProfileSettings() {
                 className="modal-status"
                 aria-live="polite"
               >
-                {usernameChanged && !validation.ok ? (
-                  <span className="status-msg">{validation.message}</span>
-                ) : displayedAvailability === "loading" ? (
+                {displayedAvailability === "loading" ? (
                   <Loader2 className="status-loading" size={18} aria-label="Checking" />
                 ) : displayedAvailability === "available" ? (
                   <span className="status-available">
@@ -367,14 +367,23 @@ export function ProfileSettings() {
                     <X size={18} aria-hidden />
                     <span className="sr-only">Taken</span>
                   </span>
-                ) : displayedAvailability === "error" ? (
-                  <span className="status-msg">Could not check</span>
                 ) : null}
               </span>
             </div>
-            <p id="profile-username-hint" className="modal-hint">
-              Letters, underscores, and hyphens only. Minimum 4 characters.
-            </p>
+            {usernameChanged && !validation.ok ? (
+              <p id="profile-username-hint" className="modal-hint modal-hint-error">
+                {validation.message}
+              </p>
+            ) : displayedAvailability === "error" ? (
+              <p id="profile-username-hint" className="modal-hint modal-hint-error">
+                Could not check that username. Try again.
+              </p>
+            ) : (
+              <p id="profile-username-hint" className="modal-hint">
+                Letters, numbers, underscores, and hyphens only. Minimum 4
+                characters.
+              </p>
+            )}
           </div>
 
           <div className="profile-field-group">

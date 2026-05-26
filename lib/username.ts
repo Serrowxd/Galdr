@@ -1,13 +1,12 @@
 /**
- * Clerk username helpers: allowed charset is Unicode letters, underscore, hyphen only (no digits).
- * Min/max length mirrors typical Clerk defaults; reconcile with Dashboard if validation diverges.
+ * Username helpers: allowed charset is Unicode letters, digits, underscore, and hyphen.
  */
 
 export const USERNAME_MIN_LENGTH = 4;
 export const USERNAME_MAX_LENGTH = 64;
 
-/** Matches one allowed character (letters via Unicode property escapes). */
-const ALLOWED_CHAR_RE = /^[\p{L}_-]$/u;
+/** Matches one allowed character (letters via Unicode property escapes, plus ASCII digits). */
+const ALLOWED_CHAR_RE = /^[\p{L}0-9_-]$/u;
 
 function isAllowedChar(ch: string): boolean {
   return ALLOWED_CHAR_RE.test(ch);
@@ -91,7 +90,7 @@ export function validateUsernameInput(raw: string): ValidateUsernameResult {
     if (!isAllowedChar(ch)) {
       return {
         ok: false,
-        message: "Use only letters, underscores (_), and hyphens (-).",
+        message: "Use only letters, numbers, underscores (_), and hyphens (-).",
       };
     }
   }

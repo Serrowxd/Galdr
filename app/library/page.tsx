@@ -80,6 +80,12 @@ export default async function LibraryPage() {
             </div>
           )}
         </div>
+
+        {user ? (
+          <p className="muted" style={{ padding: "0 0 24px" }}>
+            <Link href="/grimoire">Your grimoire →</Link>
+          </p>
+        ) : null}
       </div>
 
       <footer className="footer">

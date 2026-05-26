@@ -7,7 +7,7 @@ export function normalizeGrimoirePathSlug(segment: string): string {
 }
 
 /**
- * Clerk username → path slug. Returns null if missing or whitespace-only after trim.
+ * Username → path slug. Returns null if missing or whitespace-only after trim.
  */
 export function grimoireSlugFromUsername(username: string): string | null {
   const trimmed = username.trim();

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { getDbOptional } from "@/db";
 import { userProfiles } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
-import { validateUsernameInput } from "@/lib/clerkUsername";
+import { validateUsernameInput } from "@/lib/username";
 
 export async function GET(request: Request) {
   const supabase = await createClient();

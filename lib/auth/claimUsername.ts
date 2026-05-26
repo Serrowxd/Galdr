@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 
 import type { GaldrDb } from "@/db";
 import { userProfiles } from "@/db/schema";
-import { validateUsernameInput } from "@/lib/clerkUsername";
+import { validateUsernameInput } from "@/lib/username";
 
 export type ClaimUsernameResult =
   | { ok: true; username: string }

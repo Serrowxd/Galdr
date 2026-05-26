@@ -154,7 +154,9 @@ function FilledGrimoire({ authored }: { authored: Stave[] }) {
         </div>
 
         <p className="muted" style={{ padding: "24px 0" }}>
-          <Link href="/">← Back to Registry</Link>
+          <Link href="/library">← Your library</Link>
+          <span aria-hidden> · </span>
+          <Link href="/">Registry</Link>
         </p>
       </div>
 
@@ -261,7 +263,9 @@ function EmptyOwnerGrimoire({
         </div>
 
         <p className="muted" style={{ padding: "8px 0 24px" }}>
-          <Link href="/">← Back to Registry</Link>
+          <Link href="/library">← Your library</Link>
+          <span aria-hidden> · </span>
+          <Link href="/">Registry</Link>
         </p>
       </div>
 

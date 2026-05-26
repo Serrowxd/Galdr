@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { safeNext } from "@/lib/auth/safeNext";
-import { validateUsernameInput } from "@/lib/clerkUsername";
+import { validateUsernameInput } from "@/lib/username";
 import { VegvisirLogo } from "@/components/VegvisirLogo";
 
 const DEBOUNCE_MS = 400;
@@ -231,7 +231,7 @@ function SignUpPageInner() {
                 required
               />
               {username.length === 0 && (
-                <p className="auth-hint">Username: letters, underscores, and hyphens only. Minimum 4 characters.</p>
+                <p className="auth-hint">Username: letters, numbers, underscores, and hyphens only. Minimum 4 characters.</p>
               )}
               <button
                 type="submit"

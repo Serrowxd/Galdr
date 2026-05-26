@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getDbOptional } from "@/db";
 import { userProfiles } from "@/db/schema";
-import { validateUsernameInput } from "@/lib/clerkUsername";
+import { validateUsernameInput } from "@/lib/username";
 
 /**
  * Public username availability check for the sign-up page (no session exists

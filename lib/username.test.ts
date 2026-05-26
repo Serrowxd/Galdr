@@ -7,13 +7,15 @@ import {
   normalizeEmailLocalPartToSuggestion,
   validateUsernameInput,
   withRandomCollisionSuffix,
-} from "@/lib/clerkUsername";
+} from "@/lib/username";
 
 describe("validateUsernameInput", () => {
-  it("accepts letters, underscores, and hyphens", () => {
+  it("accepts letters, digits, underscores, and hyphens", () => {
     expect(validateUsernameInput("scribe_name-x")).toMatchObject({ ok: true });
     expect(validateUsernameInput("Odin")).toEqual({ ok: true, value: "Odin" });
     expect(validateUsernameInput("rún_skald")).toMatchObject({ ok: true });
+    expect(validateUsernameInput("user123")).toMatchObject({ ok: true });
+    expect(validateUsernameInput("4odin")).toMatchObject({ ok: true });
   });
 
   it("trims surrounding whitespace", () => {
@@ -29,8 +31,7 @@ describe("validateUsernameInput", () => {
     expect(validateUsernameInput("a".repeat(USERNAME_MAX_LENGTH + 1))).toMatchObject({ ok: false });
   });
 
-  it("rejects digits and disallowed characters", () => {
-    expect(validateUsernameInput("user123")).toMatchObject({ ok: false });
+  it("rejects disallowed characters", () => {
     expect(validateUsernameInput("bad name")).toMatchObject({ ok: false });
     expect(validateUsernameInput("dots.here")).toMatchObject({ ok: false });
     expect(validateUsernameInput("emoji😀name")).toMatchObject({ ok: false });
@@ -39,7 +40,7 @@ describe("validateUsernameInput", () => {
 
 describe("username suggestion helpers", () => {
   it("normalizes an email local-part to allowed chars only", () => {
-    expect(normalizeEmailLocalPartToSuggestion("john.doe42")).toBe("johndoe");
+    expect(normalizeEmailLocalPartToSuggestion("john.doe42")).toBe("johndoe42");
   });
 
   it("fallback suggestion is valid", () => {

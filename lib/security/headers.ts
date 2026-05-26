@@ -13,7 +13,7 @@ function buildContentSecurityPolicy(): string {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "img-src 'self' data: https://*.githubusercontent.com https://*.googleusercontent.com https://secure.gravatar.com https://*.gravatar.com https://*.gitlab.com https://gitlab.com",
+    "img-src 'self' data: https://*.supabase.co https://*.githubusercontent.com https://*.googleusercontent.com https://secure.gravatar.com https://*.gravatar.com https://*.gitlab.com https://gitlab.com",
     "object-src 'none'",
     `script-src 'self' 'unsafe-inline'${scriptDev}`,
     "style-src 'self' 'unsafe-inline'",

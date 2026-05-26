@@ -9,7 +9,7 @@ import {
   normalizeEmailLocalPartToSuggestion,
   validateUsernameInput,
   withRandomCollisionSuffix,
-} from "@/lib/clerkUsername";
+} from "@/lib/username";
 import type { User } from "@supabase/supabase-js";
 
 const DEBOUNCE_MS = 400;
@@ -196,7 +196,7 @@ function UsernameOnboardingForm({
           </span>
         </div>
         <p id="username-modal-hint" className="modal-hint">
-          Letters, underscores, and hyphens only. Minimum 4 characters.
+          Letters, numbers, underscores, and hyphens only. Minimum 4 characters.
         </p>
 
         {submitError ? (
