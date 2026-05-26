@@ -4,16 +4,12 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   images: {
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "img.clerk.com",
-        pathname: "/**",
-      },
-      {
-        protocol: "https",
-        hostname: "*.clerk.accounts.dev",
-        pathname: "/**",
-      },
+      { protocol: "https", hostname: "*.githubusercontent.com", pathname: "/**" },
+      { protocol: "https", hostname: "*.googleusercontent.com", pathname: "/**" },
+      { protocol: "https", hostname: "secure.gravatar.com", pathname: "/**" },
+      { protocol: "https", hostname: "*.gravatar.com", pathname: "/**" },
+      { protocol: "https", hostname: "*.gitlab.com", pathname: "/**" },
+      { protocol: "https", hostname: "gitlab.com", pathname: "/**" },
     ],
   },
 };

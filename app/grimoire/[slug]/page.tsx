@@ -1,31 +1,28 @@
 import type { Metadata } from "next";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { eq } from "drizzle-orm";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
 
 import { StaveCard } from "@/components/StaveCard";
+import { getDbOptional } from "@/db";
+import { userProfiles } from "@/db/schema";
 import {
   grimoireSlugFromUsername,
   normalizeGrimoirePathSlug,
 } from "@/lib/grimoireSlug";
 import type { Stave } from "@/lib/mockData";
-import {
-  getDistinctScribeSlugs,
-  getStavesByScribeSlug,
-} from "@/lib/staves";
+import { createClient } from "@/lib/supabase/server";
+import { getDistinctScribeSlugs, getStavesByScribeSlug } from "@/lib/staves";
 
 type PageProps = { params: Promise<{ slug: string }> };
-
-type ClerkUser = NonNullable<Awaited<ReturnType<typeof currentUser>>>;
 
 export async function generateStaticParams() {
   return getDistinctScribeSlugs().map((slug) => ({ slug }));
 }
 
-export async function generateMetadata({
-  params,
-}: PageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug: raw } = await params;
   const slug = normalizeGrimoirePathSlug(raw);
   if (!slug.length) return { title: "Grimoire | Galdr" };
@@ -39,20 +36,28 @@ export async function generateMetadata({
     };
   }
 
-  const { userId } = await auth();
-  if (!userId) return { title: "Grimoire | Galdr" };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { title: "Grimoire | Galdr" };
 
-  const user = await currentUser();
-  const ownerSlug =
-    typeof user?.username === "string"
-      ? grimoireSlugFromUsername(user.username)
-      : null;
+  const db = getDbOptional();
+  let username: string | null = null;
+  if (db) {
+    const [profile] = await db
+      .select({ username: userProfiles.username })
+      .from(userProfiles)
+      .where(eq(userProfiles.userId, user.id))
+      .limit(1);
+    username = profile?.username ?? null;
+  }
 
-  if (ownerSlug === slug && user?.username?.trim()) {
-    const label = user.username.trim();
+  const ownerSlug = username ? grimoireSlugFromUsername(username) : null;
+  if (ownerSlug === slug && username) {
     return {
-      title: `${label} · Grimoire | Galdr`,
-      description: `Staves authored by ${label}.`,
+      title: `${username} · Grimoire | Galdr`,
+      description: `Staves authored by ${username}.`,
     };
   }
 
@@ -65,25 +70,31 @@ export default async function GrimoireSlugPage({ params }: PageProps) {
   if (!slug.length) notFound();
 
   const authored = getStavesByScribeSlug(slug);
-
   if (authored.length > 0) {
     return <FilledGrimoire authored={authored} />;
   }
 
-  const { userId } = await auth();
-  if (!userId) notFound();
-
-  const user = await currentUser();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) notFound();
 
-  const ownerSlug =
-    typeof user.username === "string"
-      ? grimoireSlugFromUsername(user.username)
-      : null;
+  const db = getDbOptional();
+  let username: string | null = null;
+  if (db) {
+    const [profile] = await db
+      .select({ username: userProfiles.username })
+      .from(userProfiles)
+      .where(eq(userProfiles.userId, user.id))
+      .limit(1);
+    username = profile?.username ?? null;
+  }
 
+  const ownerSlug = username ? grimoireSlugFromUsername(username) : null;
   if (ownerSlug !== slug) notFound();
 
-  return <EmptyOwnerGrimoire user={user} />;
+  return <EmptyOwnerGrimoire user={user} username={username} />;
 }
 
 function FilledGrimoire({ authored }: { authored: Stave[] }) {
@@ -95,68 +106,78 @@ function FilledGrimoire({ authored }: { authored: Stave[] }) {
   const bindingsUsed = authored.reduce((acc, s) => acc + s.bindings, 0);
 
   return (
-    <section className="container page-block panel-stack">
-      <article className="profile-head">
-        <div className="avatar" aria-hidden="true">
-          {name.slice(0, 2).toUpperCase()}
-        </div>
-        <div>
-          <h1 className="section-title">{name}</h1>
-          <p className="muted" style={{ margin: "0.35rem 0 0" }}>
-            Scribe · {authored.length} staves in registry
-          </p>
-        </div>
-      </article>
+    <>
+      <div className="container">
+        <article className="profile-head">
+          <div className="profile-avatar" aria-hidden>
+            {name.slice(0, 2).toUpperCase()}
+          </div>
+          <div className="profile-meta">
+            <p className="page-hero-tag" style={{ marginBottom: 4 }}>
+              Scribe
+            </p>
+            <h1 className="profile-name">{name}</h1>
+            <p className="profile-sub">{authored.length} staves in registry</p>
+          </div>
+        </article>
+      </div>
 
-      <section className="stats-grid">
-        <article className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            Total Staves
-          </p>
-          <p className="stat-value">{authored.length}</p>
-        </article>
-        <article className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            Total Invocations
-          </p>
-          <p className="stat-value">{totalInvocations.toLocaleString()}</p>
-        </article>
-        <article className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            Avg Success Rate
-          </p>
-          <p className="stat-value success">{avgSuccess}%</p>
-        </article>
-        <article className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            Bindings Used
-          </p>
-          <p className="stat-value">{bindingsUsed}</p>
-        </article>
-      </section>
+      <div className="container" style={{ paddingTop: 24 }}>
+        <section className="stats-grid" aria-label="Scribe statistics">
+          <article className="stat-cell">
+            <span className="stat-label">Total staves</span>
+            <span className="stat-value">{authored.length}</span>
+          </article>
+          <article className="stat-cell">
+            <span className="stat-label">Total invocations</span>
+            <span className="stat-value">{totalInvocations.toLocaleString()}</span>
+          </article>
+          <article className="stat-cell">
+            <span className="stat-label">Avg success rate</span>
+            <span className="stat-value success">{avgSuccess}%</span>
+          </article>
+          <article className="stat-cell">
+            <span className="stat-label">Bindings used</span>
+            <span className="stat-value">{bindingsUsed}</span>
+          </article>
+        </section>
 
-      <section className="panel-stack">
-        <h2 className="section-title" style={{ fontSize: "1rem" }}>
-          Authored Staves
-        </h2>
+        <div className="section-head" style={{ marginTop: 28 }}>
+          <h2>Authored staves</h2>
+          <span className="muted">{authored.length} total</span>
+        </div>
+
         <div className="stave-grid">
           {authored.map((stave) => (
             <StaveCard key={stave.id} stave={stave} />
           ))}
         </div>
-      </section>
 
-      <p className="muted" style={{ marginTop: "1rem" }}>
-        <Link href="/registry">← Back to Registry</Link>
-      </p>
-    </section>
+        <p className="muted" style={{ padding: "24px 0" }}>
+          <Link href="/">← Back to Registry</Link>
+        </p>
+      </div>
+
+      <footer className="footer">
+        <div className="container">
+          <span>© 2026 Galdr — Open agent registry</span>
+        </div>
+      </footer>
+    </>
   );
 }
 
-function EmptyOwnerGrimoire({ user }: { user: ClerkUser }) {
+function EmptyOwnerGrimoire({
+  user,
+  username,
+}: {
+  user: User;
+  username: string | null;
+}) {
   const displayName =
-    user.username?.trim() ||
-    user.firstName?.trim() ||
+    username ??
+    (user.user_metadata?.name as string | undefined) ??
+    user.email?.split("@")[0] ??
     "Scribe";
 
   const t = displayName.trim();
@@ -167,84 +188,88 @@ function EmptyOwnerGrimoire({ user }: { user: ClerkUser }) {
         ? (t + t).toUpperCase()
         : "?";
 
-  const imageUrl = user.imageUrl;
+  const imageUrl = user.user_metadata?.avatar_url as string | undefined;
 
   return (
-    <section className="container page-block panel-stack">
-      <article className="profile-head">
-        {imageUrl ? (
-          <Image
-            className="grimoire-owner-avatar"
-            src={imageUrl}
-            alt=""
-            width={64}
-            height={64}
-            unoptimized
-          />
-        ) : (
-          <div className="avatar" aria-hidden="true">
-            {initials}
+    <>
+      <div className="container">
+        <article className="profile-head">
+          {imageUrl ? (
+            <Image
+              className="profile-avatar-img"
+              src={imageUrl}
+              alt=""
+              width={64}
+              height={64}
+              unoptimized
+            />
+          ) : (
+            <div className="profile-avatar" aria-hidden>
+              {initials}
+            </div>
+          )}
+          <div className="profile-meta">
+            <p className="page-hero-tag" style={{ marginBottom: 4 }}>
+              Your grimoire
+            </p>
+            <h1 className="profile-name">{displayName}</h1>
+            <p className="profile-sub">0 staves in registry</p>
           </div>
-        )}
-        <div>
-          <h1 className="section-title">{displayName}</h1>
-          <p className="muted" style={{ margin: "0.35rem 0 0" }}>
-            Your grimoire · 0 staves in registry
-          </p>
+        </article>
+      </div>
+
+      <div className="container" style={{ paddingTop: 24 }}>
+        <section className="stats-grid" aria-label="Scribe statistics">
+          <article className="stat-cell">
+            <span className="stat-label">Total staves</span>
+            <span className="stat-value">0</span>
+          </article>
+          <article className="stat-cell">
+            <span className="stat-label">Total invocations</span>
+            <span className="stat-value">0</span>
+          </article>
+          <article className="stat-cell">
+            <span className="stat-label">Avg success rate</span>
+            <span className="stat-value success">—</span>
+          </article>
+          <article className="stat-cell">
+            <span className="stat-label">Bindings used</span>
+            <span className="stat-value">0</span>
+          </article>
+        </section>
+
+        <div className="section-head" style={{ marginTop: 28 }}>
+          <h2>Authored staves</h2>
         </div>
-      </article>
 
-      <section className="stats-grid">
-        <article className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            Total Staves
-          </p>
-          <p className="stat-value">0</p>
-        </article>
-        <article className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            Total Invocations
-          </p>
-          <p className="stat-value">0</p>
-        </article>
-        <article className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            Avg Success Rate
-          </p>
-          <p className="stat-value success">—</p>
-        </article>
-        <article className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            Bindings Used
-          </p>
-          <p className="stat-value">0</p>
-        </article>
-      </section>
-
-      <section className="panel-stack">
-        <h2 className="section-title" style={{ fontSize: "1rem" }}>
-          Authored Staves
-        </h2>
-        <div className="library-empty-state">
-          <h2>No staves yet</h2>
-          <p>
-            Nothing tied to your username appears in the demo registry. Browse
-            existing work or draft something new in the Loom.
-          </p>
-          <p style={{ marginTop: "0.75rem", display: "flex", flexWrap: "wrap", gap: "0.55rem" }}>
-            <Link href="/registry" className="btn-ghost-sm">
-              Browse registry
-            </Link>
-            <Link href="/loom" className="btn-ghost-sm">
-              Open the Loom
-            </Link>
-          </p>
+        <div style={{ paddingTop: 20, paddingBottom: 32 }}>
+          <article className="empty-state">
+            <h2>No staves yet</h2>
+            <p>
+              Nothing tied to your username appears in the demo registry. Browse
+              existing work or draft something new in the Loom.
+            </p>
+            <div className="empty-state-actions">
+              <Link href="/" className="btn btn-soft btn-sm">
+                Browse registry
+              </Link>
+              <Link href="/loom" className="btn btn-primary btn-sm">
+                Open the Loom
+              </Link>
+            </div>
+          </article>
         </div>
-      </section>
 
-      <p className="muted" style={{ marginTop: "1rem" }}>
-        <Link href="/registry">← Back to Registry</Link>
-      </p>
-    </section>
+        <p className="muted" style={{ padding: "8px 0 24px" }}>
+          <Link href="/">← Back to Registry</Link>
+        </p>
+      </div>
+
+      <footer className="footer">
+        <div className="container">
+          <span>© 2026 Galdr — Open agent registry</span>
+        </div>
+      </footer>
+    </>
   );
 }

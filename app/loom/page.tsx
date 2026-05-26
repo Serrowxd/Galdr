@@ -117,8 +117,7 @@ function analyzeStave(markdown: string): CheckReport {
 
   const constraintCount = markdown
     .split("\n")
-    .filter((line) => line.trim().startsWith("-"))
-    .length;
+    .filter((line) => line.trim().startsWith("-")).length;
   if (constraintCount < 2) {
     warnings.push("Constraints section could be stronger with 2+ guardrails.");
   }
@@ -169,9 +168,9 @@ export default function LoomPage() {
   const [markdown, setMarkdown] = useState(initialMarkdown);
   const [output, setOutput] = useState("");
   const [running, setRunning] = useState(false);
-  const [activeResultTab, setActiveResultTab] = useState<
-    "terminal" | "report" | "preview"
-  >("preview");
+  const [activeResultTab, setActiveResultTab] = useState<"terminal" | "report" | "preview">(
+    "preview",
+  );
   const [traceLevel, setTraceLevel] = useState("standard");
   const [copied, setCopied] = useState(false);
   const [provider, setProvider] = useState<AIProvider>(initialSettings.provider);
@@ -194,12 +193,9 @@ export default function LoomPage() {
       setMarkdown((prev) => `${prev}\n${snippet}`);
       return;
     }
-
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const nextValue =
-      markdown.slice(0, start) + snippet + markdown.slice(end);
-
+    const nextValue = markdown.slice(0, start) + snippet + markdown.slice(end);
     setMarkdown(nextValue);
     queueMicrotask(() => {
       textarea.focus();
@@ -252,9 +248,7 @@ export default function LoomPage() {
     let current = 0;
     const timer = setInterval(() => {
       if (current < lines.length) {
-        setOutput((prev) =>
-          prev ? `${prev}\n${lines[current]}` : lines[current],
-        );
+        setOutput((prev) => (prev ? `${prev}\n${lines[current]}` : lines[current]));
         current += 1;
       } else {
         clearInterval(timer);
@@ -264,17 +258,22 @@ export default function LoomPage() {
   };
 
   return (
-    <section>
-      <div className="container page-block" style={{ paddingBottom: "0.8rem" }}>
-        <div className="section-head" style={{ marginBottom: 0 }}>
-          <h1 className="section-title">The Loom</h1>
-          <div className="loom-run-controls">
-            <label className="loom-trace-level">
+    <>
+      <div className="container">
+        <div className="loom-header">
+          <div>
+            <p className="page-hero-tag" style={{ marginBottom: 6 }}>
+              Build a stave
+            </p>
+            <h1>The Loom</h1>
+          </div>
+          <div className="loom-controls">
+            <label className="loom-trace">
               Trace
               <select
                 className="select"
                 value={traceLevel}
-                onChange={(event) => setTraceLevel(event.target.value)}
+                onChange={(e) => setTraceLevel(e.target.value)}
                 aria-label="Trace level"
               >
                 <option value="standard">Standard</option>
@@ -283,17 +282,22 @@ export default function LoomPage() {
               </select>
             </label>
             <button
-              className="loom-ghost-btn"
               type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() => setOutput("")}
               disabled={running && output.length === 0}
             >
               <Trash2 size={13} />
               Clear output
             </button>
-            <button className="loom-run-btn" type="button" onClick={handleAnalyze} disabled={running}>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={handleAnalyze}
+              disabled={running}
+            >
               <PlayCircle size={14} />
-              {running ? "Analyzing..." : "Analyze Stave"}
+              {running ? "Analyzing..." : "Analyze stave"}
             </button>
           </div>
         </div>
@@ -301,118 +305,98 @@ export default function LoomPage() {
 
       <div className="loom-pane">
         <div className="loom-col">
-          <div className="pane-head">Stave Editor ({lineCount} lines)</div>
+          <div className="loom-pane-head">Stave editor · {lineCount} lines</div>
           <div className="loom-toolbar" role="toolbar" aria-label="Editor tools">
             <div className="loom-tool-group">
               <button
-                className="loom-tool-btn"
                 type="button"
+                className="loom-tool-btn"
                 onClick={() => insertSnippet("\n## Section\n")}
               >
-                <Heading2 size={13} />
-                Heading
+                <Heading2 size={13} /> Heading
               </button>
               <button
-                className="loom-tool-btn"
                 type="button"
+                className="loom-tool-btn"
                 onClick={() => insertSnippet("\n- item one\n- item two\n")}
               >
-                <List size={13} />
-                List
+                <List size={13} /> List
               </button>
               <button
-                className="loom-tool-btn"
                 type="button"
+                className="loom-tool-btn"
                 onClick={() => insertSnippet("\n```md\n# Notes\n```\n")}
               >
-                <Code2 size={13} />
-                Code
+                <Code2 size={13} /> Code
               </button>
               <button
-                className="loom-tool-btn"
                 type="button"
+                className="loom-tool-btn"
                 onClick={() =>
-                  insertSnippet(
-                    "\n| Field | Value |\n| --- | --- |\n| Risk | High |\n",
-                  )
+                  insertSnippet("\n| Field | Value |\n| --- | --- |\n| Risk | High |\n")
                 }
               >
-                <Table size={13} />
-                Table
+                <Table size={13} /> Table
               </button>
             </div>
 
             <div className="loom-tool-group">
-              <label className="loom-template-select">
-                <span className="loom-template-label">
-                  <FileText size={13} />
-                  Template
-                </span>
-                <span className="loom-template-select-wrap">
-                  <select
-                    className="select loom-template-dropdown"
-                    defaultValue=""
-                    onChange={(event) => {
-                      const value = event.target.value as keyof typeof templates;
-                      if (value) {
-                        applyTemplate(value);
-                        event.target.value = "";
-                      }
-                    }}
-                    aria-label="Apply markdown template"
-                  >
-                    <option value="" disabled>
-                      Select
-                    </option>
-                    <option value="reviewer">Code Reviewer</option>
-                    <option value="moderation">Forum Moderator</option>
-                    <option value="release">Release Notes</option>
-                  </select>
-                  <span className="loom-template-caret" aria-hidden="true">
-                    ▾
-                  </span>
-                </span>
+              <label className="loom-template">
+                <FileText size={13} />
+                <select
+                  className="select"
+                  defaultValue=""
+                  onChange={(e) => {
+                    const value = e.target.value as keyof typeof templates;
+                    if (value) {
+                      applyTemplate(value);
+                      e.target.value = "";
+                    }
+                  }}
+                  aria-label="Apply template"
+                >
+                  <option value="" disabled>
+                    Template
+                  </option>
+                  <option value="reviewer">Code Reviewer</option>
+                  <option value="moderation">Forum Moderator</option>
+                  <option value="release">Release Notes</option>
+                </select>
               </label>
-              <button className="loom-tool-btn" type="button" onClick={formatMarkdown}>
-                <Wand2 size={13} />
-                Tidy
+              <button type="button" className="loom-tool-btn" onClick={formatMarkdown}>
+                <Wand2 size={13} /> Tidy
               </button>
-              <button className="loom-tool-btn" type="button" onClick={copyMarkdown}>
-                <Copy size={13} />
-                {copied ? "Copied" : "Copy"}
+              <button type="button" className="loom-tool-btn" onClick={copyMarkdown}>
+                <Copy size={13} /> {copied ? "Copied" : "Copy"}
               </button>
               <button
-                className="loom-tool-btn"
                 type="button"
+                className="loom-tool-btn"
                 onClick={() => setMarkdown(initialMarkdown)}
               >
-                <RotateCcw size={13} />
-                Reset
+                <RotateCcw size={13} /> Reset
               </button>
               <button
-                className="loom-tool-btn is-danger"
                 type="button"
+                className="loom-tool-btn is-danger"
                 onClick={() => setMarkdown("")}
               >
-                <Eraser size={13} />
-                Clear
+                <Eraser size={13} /> Clear
               </button>
             </div>
           </div>
-          <label style={{ display: "contents" }}>
-            <textarea
-              ref={textareaRef}
-              className="loom-editor"
-              value={markdown}
-              onChange={(event) => setMarkdown(event.target.value)}
-              aria-label="Markdown editor"
-              spellCheck={false}
-            />
-          </label>
+          <textarea
+            ref={textareaRef}
+            className="loom-editor"
+            value={markdown}
+            onChange={(e) => setMarkdown(e.target.value)}
+            aria-label="Markdown editor"
+            spellCheck={false}
+          />
         </div>
 
         <div className="loom-col">
-          <div className="pane-head">Quality Check Results</div>
+          <div className="loom-pane-head">Quality check results</div>
           <div className="loom-result-tabs" role="tablist" aria-label="Result views">
             <button
               type="button"
@@ -420,7 +404,7 @@ export default function LoomPage() {
               className={`loom-result-tab ${activeResultTab === "terminal" ? "is-active" : ""}`}
               onClick={() => setActiveResultTab("terminal")}
             >
-              Terminal Stream
+              Terminal
             </button>
             <button
               type="button"
@@ -428,7 +412,7 @@ export default function LoomPage() {
               className={`loom-result-tab ${activeResultTab === "report" ? "is-active" : ""}`}
               onClick={() => setActiveResultTab("report")}
             >
-              Structured Report
+              Report
             </button>
             <button
               type="button"
@@ -436,32 +420,33 @@ export default function LoomPage() {
               className={`loom-result-tab ${activeResultTab === "preview" ? "is-active" : ""}`}
               onClick={() => setActiveResultTab("preview")}
             >
-              Markdown Preview
+              Preview
             </button>
           </div>
 
           {activeResultTab === "terminal" ? (
             output ? (
-              <pre className="terminal">
+              <pre className="loom-terminal">
                 {output}
                 {running ? <span className="cursor-pulse" /> : null}
               </pre>
             ) : (
-              <p className="terminal-muted">
-                Press <strong style={{ color: "var(--accent)" }}>Analyze Stave</strong> to run a quality check.
+              <p className="loom-terminal-muted">
+                Press <strong style={{ color: "var(--accent)" }}>Analyze stave</strong> to
+                run a quality check.
               </p>
             )
           ) : null}
 
           {activeResultTab === "report" ? (
-            <section className="loom-report-panel">
+            <section className="loom-report">
               <div className="loom-report-settings">
                 <label className="loom-report-field">
-                  Provider
+                  <span className="loom-report-field-label">Provider</span>
                   <select
-                    className="select loom-report-control"
+                    className="select"
                     value={provider}
-                    onChange={(event) => setProvider(event.target.value as AIProvider)}
+                    onChange={(e) => setProvider(e.target.value as AIProvider)}
                   >
                     {providerOptions.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -471,12 +456,12 @@ export default function LoomPage() {
                   </select>
                 </label>
                 <label className="loom-report-field">
-                  API Key
+                  <span className="loom-report-field-label">API key</span>
                   <input
-                    className="input loom-report-control"
+                    className="input"
                     type="password"
                     value={apiKey}
-                    onChange={(event) => setApiKey(event.target.value)}
+                    onChange={(e) => setApiKey(e.target.value)}
                     placeholder="sk-..."
                   />
                 </label>
@@ -487,18 +472,18 @@ export default function LoomPage() {
                   <input
                     type="checkbox"
                     checked={saveToGlobal}
-                    onChange={(event) => setSaveToGlobal(event.target.checked)}
+                    onChange={(e) => setSaveToGlobal(e.target.checked)}
                   />
                   Save to global settings
                 </label>
                 <button
                   type="button"
-                  className="loom-ghost-btn"
+                  className="btn btn-soft btn-sm"
                   onClick={handleSaveSettings}
                 >
                   Save settings
                 </button>
-                <Link href="/settings" className="loom-settings-link">
+                <Link href="/settings" className="stave-action-link">
                   Open settings <ExternalLink size={12} />
                 </Link>
                 {savedSettingsNotice ? (
@@ -507,37 +492,57 @@ export default function LoomPage() {
               </div>
 
               <div className="loom-report-score">
-                <span>Quality Score</span>
-                <strong>{report.score}/100</strong>
+                <span className="loom-report-score-label">Quality score</span>
+                <strong className="loom-report-score-value">{report.score}/100</strong>
               </div>
 
               <div className="loom-report-grid">
-                <article>
-                  <h3><ShieldAlert size={14} /> Errors ({report.errors.length})</h3>
+                <article className="loom-report-card">
+                  <h3>
+                    <ShieldAlert size={13} /> Errors ({report.errors.length})
+                  </h3>
                   {report.errors.length ? (
-                    <ul>{report.errors.map((item) => <li key={item}>{item}</li>)}</ul>
+                    <ul>
+                      {report.errors.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
                   ) : (
                     <p>No blocking errors detected.</p>
                   )}
                 </article>
-                <article>
-                  <h3><TriangleAlert size={14} /> Warnings ({report.warnings.length})</h3>
+                <article className="loom-report-card">
+                  <h3>
+                    <TriangleAlert size={13} /> Warnings ({report.warnings.length})
+                  </h3>
                   {report.warnings.length ? (
-                    <ul>{report.warnings.map((item) => <li key={item}>{item}</li>)}</ul>
+                    <ul>
+                      {report.warnings.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
                   ) : (
                     <p>No warnings.</p>
                   )}
                 </article>
-                <article>
-                  <h3><Lightbulb size={14} /> Suggestions ({report.suggestions.length})</h3>
+                <article className="loom-report-card">
+                  <h3>
+                    <Lightbulb size={13} /> Suggestions ({report.suggestions.length})
+                  </h3>
                   {report.suggestions.length ? (
-                    <ul>{report.suggestions.map((item) => <li key={item}>{item}</li>)}</ul>
+                    <ul>
+                      {report.suggestions.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
                   ) : (
                     <p>No suggestions.</p>
                   )}
                 </article>
-                <article>
-                  <h3><BadgeCheck size={14} /> Status</h3>
+                <article className="loom-report-card">
+                  <h3>
+                    <BadgeCheck size={13} /> Status
+                  </h3>
                   <p>
                     {report.errors.length > 0
                       ? "Needs revision before dependable runs."
@@ -549,10 +554,10 @@ export default function LoomPage() {
           ) : null}
 
           {activeResultTab === "preview" ? (
-            <article className="loom-preview-panel">{renderMarkdownPreview(markdown)}</article>
+            <article className="loom-preview">{renderMarkdownPreview(markdown)}</article>
           ) : null}
         </div>
       </div>
-    </section>
+    </>
   );
 }

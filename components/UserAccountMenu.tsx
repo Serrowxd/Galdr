@@ -1,31 +1,31 @@
 "use client";
 
-import { useClerk, useUser } from "@clerk/nextjs";
 import { ChevronDown } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
 
-import { ConnectedAccountPanel } from "@/components/ConnectedAccountPanel";
+import { createClient } from "@/lib/supabase/client";
 
-export function UserAccountMenu() {
-  const { user, isLoaded } = useUser();
-  const { signOut } = useClerk();
+type UserAccountMenuProps = {
+  user: User;
+};
+
+export function UserAccountMenu({ user }: UserAccountMenuProps) {
   const [open, setOpen] = useState(false);
-  const [accountPanelOpen, setAccountPanelOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (!open) return;
-
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-
     const onPointer = (e: MouseEvent) => {
-      const el = rootRef.current;
-      if (!el?.contains(e.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
-
     document.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onPointer);
     return () => {
@@ -34,123 +34,101 @@ export function UserAccountMenu() {
     };
   }, [open]);
 
-  if (!isLoaded) {
-    return <span className="topbar-user-menu-skel" aria-hidden />;
+  const email = user.email ?? "";
+  const emailLocal = email.split("@")[0] ?? "";
+  const label =
+    (user.user_metadata?.preferred_username as string | undefined) ??
+    (user.user_metadata?.user_name as string | undefined) ??
+    emailLocal ??
+    "Scribe";
+
+  const avatarUrl = user.user_metadata?.avatar_url as string | undefined;
+  const avatarInitial = Array.from(label.trim())[0]?.toUpperCase() ?? "?";
+
+  async function handleSignOut() {
+    setOpen(false);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/");
+    router.refresh();
   }
 
-  if (!user) return null;
-
-  const emailFull = user.primaryEmailAddress?.emailAddress ?? "";
-  const at = emailFull.indexOf("@");
-  const emailLocal = at > 0 ? emailFull.slice(0, at) : "";
-
-  const hasUsername =
-    typeof user.username === "string" && user.username.trim().length > 0;
-
-  const label = hasUsername
-    ? user.username!.trim()
-    : emailLocal || user.firstName?.trim() || "Scribe";
-
-  const avatarUrl = user.imageUrl;
-
-  const avatarInitial = Array.from(label.trim())[0];
-
   return (
-    <>
-      <div className="topbar-user-menu" ref={rootRef}>
-        <button
-          type="button"
-          className="topbar-user-trigger"
-          aria-expanded={open}
-          aria-haspopup="menu"
-          aria-controls="topbar-user-dropdown"
-          id="topbar-user-trigger"
-          aria-label={`Account menu, signed in as ${label}`}
-          onClick={() => setOpen((v) => !v)}
-        >
-          {avatarUrl ? (
-            <Image
-              className="topbar-user-avatar"
-              src={avatarUrl}
-              alt=""
-              width={26}
-              height={26}
-              unoptimized
-            />
-          ) : (
-            <span className="topbar-user-avatar-placeholder" aria-hidden>
-              {avatarInitial ? avatarInitial.toUpperCase() : "?"}
-            </span>
-          )}
-          <span className="topbar-user-name">{label}</span>
-          <ChevronDown
-            size={14}
-            className={`topbar-user-chevron ${open ? "is-open" : ""}`}
-            aria-hidden
+    <div className="user-menu" ref={rootRef}>
+      <button
+        type="button"
+        className="user-trigger"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-controls="topbar-user-dropdown"
+        id="topbar-user-trigger"
+        aria-label={`Account menu, signed in as ${label}`}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {avatarUrl ? (
+          <Image
+            className="user-avatar"
+            src={avatarUrl}
+            alt=""
+            width={24}
+            height={24}
+            unoptimized
           />
-        </button>
+        ) : (
+          <span className="user-avatar-fallback" aria-hidden>
+            {avatarInitial}
+          </span>
+        )}
+        <span className="user-name">{label}</span>
+        <ChevronDown
+          size={13}
+          className={`user-chevron ${open ? "is-open" : ""}`}
+          aria-hidden
+        />
+      </button>
 
-        {open ? (
-          <div
-            className="topbar-user-dropdown"
-            id="topbar-user-dropdown"
-            role="menu"
-            aria-labelledby="topbar-user-trigger"
-          >
-            <button
-              type="button"
-              className="topbar-user-menu-item"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                setAccountPanelOpen(true);
-              }}
-            >
-              Connected account
-            </button>
-            <button type="button" className="topbar-user-menu-item" role="menuitem">
-              Invocations ledger <span className="topbar-user-placeholder-tag">soon</span>
-            </button>
-            <button type="button" className="topbar-user-menu-item" role="menuitem">
-              API keys <span className="topbar-user-placeholder-tag">soon</span>
-            </button>
-            <div className="topbar-user-menu-divider" role="presentation" />
-            <button
-              type="button"
-              className="topbar-user-menu-item topbar-user-menu-item-signout"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                void signOut({ redirectUrl: "/" });
-              }}
-            >
-              Sign out
-            </button>
-          </div>
-        ) : null}
-      </div>
-
-      {accountPanelOpen ? (
+      {open ? (
         <div
-          className="username-modal-backdrop"
-          role="presentation"
-          onClick={() => setAccountPanelOpen(false)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setAccountPanelOpen(false);
-          }}
+          className="user-dropdown"
+          id="topbar-user-dropdown"
+          role="menu"
+          aria-labelledby="topbar-user-trigger"
         >
-          <div
-            className="username-modal-panel frame connected-account-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="connected-account-title"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
+          <Link
+            href="/grimoire"
+            className="user-menu-item"
+            role="menuitem"
+            onClick={() => setOpen(false)}
           >
-            <ConnectedAccountPanel onClose={() => setAccountPanelOpen(false)} />
-          </div>
+            Your grimoire
+          </Link>
+          <Link
+            href="/library"
+            className="user-menu-item"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+          >
+            Your library
+          </Link>
+          <Link
+            href="/settings"
+            className="user-menu-item"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+          >
+            Settings
+          </Link>
+          <div className="user-menu-divider" role="presentation" />
+          <button
+            type="button"
+            className="user-menu-item user-menu-item-signout"
+            role="menuitem"
+            onClick={() => void handleSignOut()}
+          >
+            Sign out
+          </button>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }

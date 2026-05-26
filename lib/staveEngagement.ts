@@ -31,13 +31,13 @@ export async function getCommentCount(db: GaldrDb, staveId: string) {
 export async function getUserVote(
   db: GaldrDb,
   staveId: string,
-  clerkUserId: string,
+  userId: string,
 ): Promise<1 | -1 | 0> {
   const [row] = await db
     .select({ value: staveVotes.value })
     .from(staveVotes)
     .where(
-      and(eq(staveVotes.staveId, staveId), eq(staveVotes.clerkUserId, clerkUserId)),
+      and(eq(staveVotes.staveId, staveId), eq(staveVotes.userId, userId)),
     )
     .limit(1);
   if (!row) return 0;
@@ -47,13 +47,13 @@ export async function getUserVote(
 export async function isStaveSaved(
   db: GaldrDb,
   staveId: string,
-  clerkUserId: string,
+  userId: string,
 ): Promise<boolean> {
   const [row] = await db
     .select({ staveId: savedStaves.staveId })
     .from(savedStaves)
     .where(
-      and(eq(savedStaves.staveId, staveId), eq(savedStaves.clerkUserId, clerkUserId)),
+      and(eq(savedStaves.staveId, staveId), eq(savedStaves.userId, userId)),
     )
     .limit(1);
   return Boolean(row);
@@ -77,10 +77,10 @@ export async function listCommentsForStave(
     .limit(limit);
 }
 
-export async function listSavedStaveIds(db: GaldrDb, clerkUserId: string) {
+export async function listSavedStaveIds(db: GaldrDb, userId: string) {
   const rows = await db
     .select({ staveId: savedStaves.staveId })
     .from(savedStaves)
-    .where(eq(savedStaves.clerkUserId, clerkUserId));
+    .where(eq(savedStaves.userId, userId));
   return rows.map((r) => r.staveId);
 }

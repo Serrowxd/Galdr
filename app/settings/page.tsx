@@ -23,59 +23,88 @@ export default function SettingsPage() {
 
   const handleSave = () => {
     saveGlobalAISettings({ provider, apiKey });
-    setSavedNotice("Saved. Loom report tab will auto-fill this provider and key.");
-    setTimeout(() => setSavedNotice(""), 1800);
+    setSavedNotice("Saved. The Loom report tab will auto-fill this provider and key.");
+    setTimeout(() => setSavedNotice(""), 2200);
   };
 
   return (
-    <section className="container page-block panel-stack">
-      <div className="section-head">
-        <h1 className="section-title">Settings</h1>
-        <span className="muted">Global AI provider defaults</span>
+    <>
+      <section className="page-hero" aria-labelledby="settings-title">
+        <div className="container">
+          <p className="page-hero-tag">Account preferences</p>
+          <h1 id="settings-title" className="page-hero-title">
+            Settings.
+          </h1>
+          <p className="page-hero-sub">
+            Global AI provider defaults. Set them once and the Loom will reuse them
+            for quality checks and pseudo-runs.
+          </p>
+        </div>
+      </section>
+
+      <div className="container" style={{ paddingTop: 32, paddingBottom: 48 }}>
+        <div style={{ display: "grid", gap: 16, maxWidth: 560 }}>
+          <article className="surface surface-padded stack-sm">
+            <h2 style={{ fontSize: 14, fontWeight: 500 }}>AI provider</h2>
+            <p className="muted" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+              Choose your preferred LLM provider for quality checks performed in the
+              Loom.
+            </p>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+                marginTop: 8,
+              }}
+            >
+              <label className="stack-sm" style={{ gap: 6 }}>
+                <span className="label-tiny">Provider</span>
+                <select
+                  className="select"
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value as AIProvider)}
+                  aria-label="Global AI provider"
+                >
+                  {providerOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="stack-sm" style={{ gap: 6 }}>
+                <span className="label-tiny">API key</span>
+                <input
+                  className="input"
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk-..."
+                  aria-label="Global API key"
+                />
+              </label>
+            </div>
+
+            <div
+              className="row"
+              style={{ marginTop: 12, gap: 12, flexWrap: "wrap" }}
+            >
+              <button type="button" className="btn btn-primary btn-sm" onClick={handleSave}>
+                Save defaults
+              </button>
+              {savedNotice ? <span className="muted">{savedNotice}</span> : null}
+            </div>
+          </article>
+        </div>
       </div>
 
-      <article className="section global-settings-panel">
-        <p className="muted">
-          Set your global provider and API key once. The Loom structured report tab will
-          auto-fill these values.
-        </p>
-
-        <div className="global-settings-grid">
-          <label className="global-settings-field">
-            Provider
-            <select
-              className="select"
-              value={provider}
-              onChange={(event) => setProvider(event.target.value as AIProvider)}
-              aria-label="Global AI provider"
-            >
-              {providerOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="global-settings-field">
-            API Key
-            <input
-              className="input"
-              type="password"
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
-              placeholder="sk-..."
-              aria-label="Global API key"
-            />
-          </label>
+      <footer className="footer">
+        <div className="container">
+          <span>© 2026 Galdr — Open agent registry</span>
         </div>
-
-        <div className="global-settings-actions">
-          <button className="btn" type="button" onClick={handleSave}>
-            Save global defaults
-          </button>
-          {savedNotice ? <span className="muted">{savedNotice}</span> : null}
-        </div>
-      </article>
-    </section>
+      </footer>
+    </>
   );
 }

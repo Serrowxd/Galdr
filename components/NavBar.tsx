@@ -1,11 +1,11 @@
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { Menu } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { createClient } from "@/lib/supabase/client";
 import { GaldrSignInButton } from "@/components/GaldrSignInButton";
 import {
   Sheet,
@@ -16,14 +16,12 @@ import {
 } from "@/components/ui/sheet";
 import { UserAccountMenu } from "@/components/UserAccountMenu";
 import { VegvisirLogo } from "@/components/VegvisirLogo";
+import type { User } from "@supabase/supabase-js";
 
 const navLinks = [
-  { href: "/", label: "Home" },
-  { href: "/registry", label: "Registry" },
   { href: "/library", label: "Library" },
-  { href: "/loom", label: "The Loom" },
-  { href: "/settings", label: "Settings" },
-  { href: "/grimoire", label: "Grimoire" },
+  { href: "/grimoire", label: "Scribes" },
+  { href: "/loom", label: "Loom" },
 ];
 
 function PrimaryNavLinks({
@@ -39,7 +37,7 @@ function PrimaryNavLinks({
         const isActive =
           item.href === "/grimoire"
             ? pathname.startsWith("/grimoire")
-            : pathname === item.href;
+            : pathname.startsWith(item.href);
         return (
           <Link
             key={item.href}
@@ -57,44 +55,63 @@ function PrimaryNavLinks({
 
 export function NavBar() {
   const pathname = usePathname();
-  const { isLoaded, isSignedIn } = useAuth();
+  const [user, setUser] = useState<User | null | undefined>(undefined);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) =>
+      setUser(session?.user ?? null),
+    );
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const isLoaded = user !== undefined;
 
   return (
     <header className="topbar">
-      <div className="topbar-inner frame">
-        <div className="brand" aria-label="Galdr brand">
-          <VegvisirLogo size={36} />
-          <span className="brand-title">GALDR</span>
+      <div className="topbar-inner">
+        <div className="topbar-left">
+          <Link href="/" className="brand" aria-label="Galdr home">
+            <VegvisirLogo size={28} className="brand-mark" />
+            <span className="brand-name">Galdr</span>
+          </Link>
+
+          <nav aria-label="Primary navigation" className="topnav">
+            <PrimaryNavLinks pathname={pathname} />
+          </nav>
         </div>
 
-        <nav aria-label="Primary navigation" className="topnav topnav--desktop">
-          <PrimaryNavLinks pathname={pathname} />
-        </nav>
-
-        <div className="topnav-mobile">
+        <div className="topbar-right">
           <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
             <SheetTrigger asChild>
               <button
                 type="button"
-                className="btn-ghost-sm topnav-menu-trigger"
+                className="topbar-menu-trigger"
                 aria-expanded={mobileNavOpen}
                 aria-controls="primary-nav-sheet"
               >
-                <Menu size={20} strokeWidth={2} aria-hidden />
+                <Menu size={18} strokeWidth={1.75} aria-hidden />
                 <span className="sr-only">Open navigation menu</span>
               </button>
             </SheetTrigger>
             <SheetContent
               side="right"
               id="primary-nav-sheet"
-              className="sheet-content-brutalist"
               showCloseButton
             >
               <SheetHeader>
                 <SheetTitle className="sr-only">Primary navigation</SheetTitle>
               </SheetHeader>
-              <nav className="topnav-sheet-nav" aria-label="Primary navigation">
+              <nav
+                className="topnav"
+                style={{ flexDirection: "column", alignItems: "stretch", gap: 4, padding: "8px 0" }}
+                aria-label="Primary navigation"
+              >
                 <PrimaryNavLinks
                   pathname={pathname}
                   onNavigate={() => setMobileNavOpen(false)}
@@ -102,19 +119,27 @@ export function NavBar() {
               </nav>
             </SheetContent>
           </Sheet>
-        </div>
 
-        <div className="topbar-auth">
           {!isLoaded ? (
-            <span className="topbar-auth-skel" aria-hidden />
-          ) : isSignedIn ? (
-            <UserAccountMenu />
+            <span className="user-skel" aria-hidden />
+          ) : user ? (
+            <>
+              <Link href="/loom" className="btn btn-primary btn-sm">
+                Publish stave
+              </Link>
+              <UserAccountMenu user={user} />
+            </>
           ) : (
-            <GaldrSignInButton>
-              <button type="button" className="btn-ghost-sm">
-                Sign in
-              </button>
-            </GaldrSignInButton>
+            <>
+              <GaldrSignInButton>
+                <button type="button" className="btn btn-ghost btn-sm">
+                  Sign in
+                </button>
+              </GaldrSignInButton>
+              <Link href="/loom" className="btn btn-primary btn-sm">
+                Publish stave
+              </Link>
+            </>
           )}
         </div>
       </div>
