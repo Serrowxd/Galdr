@@ -1,29 +1,32 @@
 import type { Metadata, Viewport } from "next";
-import { ClerkProvider } from "@clerk/nextjs";
-import { ui } from "@clerk/ui";
-import { JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { NavBar } from "@/components/NavBar";
-import { OAuthSwapHandler } from "@/components/ConnectedAccountPanel";
 import { UsernameOnboardingModal } from "@/components/UsernameOnboardingModal";
-import { clerkAppearance } from "@/lib/clerkAuth";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-sans-app",
+});
 
 const jetBrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  weight: ["400", "800"],
-  variable: "--font-jetbrains-mono",
+  weight: ["400", "500"],
+  variable: "--font-mono-app",
 });
 
 export const metadata: Metadata = {
-  title: "Galdr | Agent Instruction Registry",
+  title: "Galdr — Open agent registry",
   description:
-    "A brutalist registry for Markdown-based AI agent instruction staves.",
+    "Skills for your agents. Built by the community. Download staves — markdown skill bundles for Claude, Codex, and any agent that reads instructions.",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#1e1e1e",
 };
 
 export default function RootLayout({
@@ -32,15 +35,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider ui={ui} appearance={clerkAppearance}>
-      <html lang="en">
-        <body className={jetBrainsMono.variable}>
-          <NavBar />
-          <OAuthSwapHandler />
-          <UsernameOnboardingModal />
-          <main className="app-shell">{children}</main>
-        </body>
-      </html>
-    </ClerkProvider>
+    <html lang="en">
+      <body className={`${inter.variable} ${jetBrainsMono.variable}`}>
+        <NavBar />
+        <UsernameOnboardingModal />
+        <main className="app-shell">{children}</main>
+      </body>
+    </html>
   );
 }

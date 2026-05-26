@@ -1,6 +1,6 @@
 "use client";
 
-import { SignInButton } from "@clerk/nextjs";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -8,22 +8,10 @@ type GaldrSignInButtonProps = {
   children: ReactNode;
 };
 
-/**
- * Opens Clerk sign-in in a modal on the current page.
- * OAuth runs in a popup so the Galdr page never navigates to /sign-in.
- */
+/** Wraps children in a link to /sign-in, passing the current path as ?next= */
 export function GaldrSignInButton({ children }: GaldrSignInButtonProps) {
   const pathname = usePathname();
-  const fallbackRedirectUrl = pathname || "/";
+  const href = `/sign-in?next=${encodeURIComponent(pathname || "/")}`;
 
-  return (
-    <SignInButton
-      mode="modal"
-      oauthFlow="popup"
-      fallbackRedirectUrl={fallbackRedirectUrl}
-      signUpFallbackRedirectUrl={fallbackRedirectUrl}
-    >
-      {children}
-    </SignInButton>
-  );
+  return <Link href={href}>{children}</Link>;
 }

@@ -1,12 +1,23 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { getDbOptional } from "@/db";
-import { comments } from "@/db/schema";
-import { listCommentsForStave } from "@/lib/staveEngagement";
+import { comments, userProfiles } from "@/db/schema";
+import { getCommentCount, listCommentsForStave } from "@/lib/staveEngagement";
+import { createClient } from "@/lib/supabase/server";
 import { isValidStaveId } from "@/lib/staves";
+import { rateLimit } from "@/lib/rateLimit";
+import { eq } from "drizzle-orm";
 
 const MAX_LEN = 8000;
+const RATE_LIMIT = 5;
+const RATE_WINDOW_MS = 60_000;
+
+function tooManyRequests(retryAfterMs: number) {
+  return NextResponse.json(
+    { error: "Too many requests. Please slow down." },
+    { status: 429, headers: { "Retry-After": String(Math.ceil(retryAfterMs / 1000)) } },
+  );
+}
 
 export async function GET(
   _request: Request,
@@ -24,10 +35,7 @@ export async function GET(
 
   const rows = await listCommentsForStave(db, id);
   return NextResponse.json({
-    comments: rows.map((r) => ({
-      ...r,
-      createdAt: r.createdAt.toISOString(),
-    })),
+    comments: rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
   });
 }
 
@@ -35,9 +43,15 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const { userId } = await auth();
-  if (!userId) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const limit = rateLimit(`comments:${user.id}`, RATE_LIMIT, RATE_WINDOW_MS);
+  if (!limit.ok) {
+    return tooManyRequests(limit.retryAfterMs);
   }
 
   const { id } = await context.params;
@@ -72,25 +86,29 @@ export async function POST(
     return NextResponse.json({ error: "Body too long" }, { status: 400 });
   }
 
-  const user = await currentUser();
-  const authorLabel =
-    user?.username ??
-    user?.firstName ??
-    user?.primaryEmailAddress?.emailAddress ??
-    "Scribe";
+  // Resolve display name: prefer stored username, fall back to email local-part
+  const [profile] = await db
+    .select({ username: userProfiles.username })
+    .from(userProfiles)
+    .where(eq(userProfiles.userId, user.id))
+    .limit(1);
+
+  const emailLocal = user.email?.split("@")[0] ?? "";
+  const authorLabel = (profile?.username ?? emailLocal) || "Scribe";
 
   await db.insert(comments).values({
     staveId: id,
-    clerkUserId: userId,
+    userId: user.id,
     authorLabel,
     body,
   });
 
-  const rows = await listCommentsForStave(db, id, 80);
+  const [rows, count] = await Promise.all([
+    listCommentsForStave(db, id, 80),
+    getCommentCount(db, id),
+  ]);
   return NextResponse.json({
-    comments: rows.map((r) => ({
-      ...r,
-      createdAt: r.createdAt.toISOString(),
-    })),
+    comments: rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
+    count,
   });
 }

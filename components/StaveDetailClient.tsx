@@ -1,16 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   Bookmark,
   ChevronRight,
   MessageCircle,
   ThumbsDown,
   ThumbsUp,
+  Zap,
 } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
 
+import { createClient } from "@/lib/supabase/client";
 import { GaldrSignInButton } from "@/components/GaldrSignInButton";
 import { renderMarkdownPreview } from "@/lib/markdownPreview";
 import type { Stave } from "@/lib/mockData";
@@ -86,11 +87,11 @@ function TreeList({
   onSelect: (path: string) => void;
 }) {
   return (
-    <ul className={`stave-tree-list depth-${depth}`}>
+    <ul className="stave-tree-list">
       {nodes.map((node) => {
         if (node.kind === "dir") {
           return (
-            <li key={`${depth}-${node.name}`} className="stave-tree-dir">
+            <li key={`${depth}-${node.name}`}>
               <div className="stave-tree-row stave-tree-folder">
                 <ChevronRight size={12} aria-hidden />
                 <span>{node.name}</span>
@@ -144,7 +145,20 @@ export function StaveDetailClient({
   initialSaved,
   initialComments,
 }: StaveDetailClientProps) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const [user, setUser] = useState<{ id: string } | null | undefined>(undefined);
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_e, session) =>
+      setUser(session?.user ?? null),
+    );
+    return () => subscription.unsubscribe();
+  }, []);
+  const isLoaded = user !== undefined;
+  const isSignedIn = user !== null && user !== undefined;
+
   const defaultPath =
     packageFiles.find((f) => f.path.endsWith("README.md"))?.path ??
     packageFiles[0]?.path ??
@@ -231,10 +245,10 @@ export function StaveDetailClient({
           body: JSON.stringify({ body }),
         });
         if (!res.ok) throw new Error("Comment failed");
-        const data = (await res.json()) as { comments: StaveCommentDTO[] };
+        const data = (await res.json()) as { comments: StaveCommentDTO[]; count: number };
         setComments(data.comments);
         setCommentDraft("");
-        setTotals((t) => ({ ...t, commentsCount: data.comments.length }));
+        setTotals((t) => ({ ...t, commentsCount: data.count }));
       } catch {
         setError("Could not post comment.");
       }
@@ -243,15 +257,64 @@ export function StaveDetailClient({
 
   return (
     <div className="stave-detail-stack">
+      <header className="stave-detail-head">
+        <h1 className="stave-detail-title">{stave.title}</h1>
+        <p className="stave-detail-author">
+          by{" "}
+          <Link href={grimoireHref}>
+            {stave.scribe}
+          </Link>
+        </p>
+        <p className="stave-detail-desc">{stave.description}</p>
+        <div className="stave-detail-tags">
+          {stave.tags.map((tag) => (
+            <span key={`${stave.id}-${tag}`} className="tag">
+              {tag}
+            </span>
+          ))}
+        </div>
+      </header>
+
+      <section className="stats-grid" aria-label="Stave statistics">
+        <article className="stat-cell">
+          <span className="stat-label">Invocations</span>
+          <span className="stat-value">{stave.invocations.toLocaleString()}</span>
+        </article>
+        <article className="stat-cell">
+          <span className="stat-label">Bindings</span>
+          <span className="stat-value">{stave.bindings}</span>
+        </article>
+        <article className="stat-cell">
+          <span className="stat-label">Success rate</span>
+          <span className="stat-value success">{stave.successRate}%</span>
+        </article>
+        <article className="stat-cell">
+          <span className="stat-label">Registry views</span>
+          <span className="stat-value">{stave.viewsCount.toLocaleString()}</span>
+        </article>
+        <article className="stat-cell">
+          <span className="stat-label">Popularity</span>
+          <span className="stat-value">{stave.popularityScore}</span>
+        </article>
+        <article className="stat-cell">
+          <span className="stat-label">Published</span>
+          <span className="stat-value" style={{ fontSize: 15, fontWeight: 400 }}>
+            {new Date(stave.publishedAt).toLocaleDateString()}
+          </span>
+        </article>
+      </section>
+
       <section className="stave-inspector" aria-label="Stave package contents">
         <div className="stave-inspector-head">
           <h2 className="stave-inspector-title">Package</h2>
-          <span className="muted stave-inspector-path">{selectedPath}</span>
+          <span className="stave-inspector-path">{selectedPath}</span>
         </div>
         <div className="stave-inspector-grid">
           <aside className="stave-tree-panel" aria-label="File tree">
             {tree.length === 0 ? (
-              <p className="muted">No package files for this stave.</p>
+              <p className="muted" style={{ padding: 12 }}>
+                No package files for this stave.
+              </p>
             ) : (
               <TreeList
                 nodes={tree}
@@ -289,7 +352,7 @@ export function StaveDetailClient({
                 aria-label="Raw markdown"
               />
             ) : (
-              <article className="loom-preview-panel stave-md-preview">
+              <article className="loom-preview stave-md-preview">
                 {renderMarkdownPreview(content)}
               </article>
             )}
@@ -297,70 +360,8 @@ export function StaveDetailClient({
         </div>
       </section>
 
-      <section className="stave-scribe-block panel-stack">
-        <div className="section-head-tight">
-          <h2 className="section-title">{stave.title}</h2>
-          <p className="muted" style={{ margin: "0.25rem 0 0" }}>
-            by{" "}
-            <Link href={grimoireHref} className="stave-scribe-link">
-              {stave.scribe}
-            </Link>
-          </p>
-        </div>
-        <p className="stave-long-desc">{stave.description}</p>
-      </section>
-
-      <section className="stats-grid" aria-label="Stave statistics">
-        <article className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            Invocations
-          </p>
-          <p className="stat-value">{stave.invocations.toLocaleString()}</p>
-        </article>
-        <article className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            Bindings
-          </p>
-          <p className="stat-value">{stave.bindings}</p>
-        </article>
-        <article className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            Success rate
-          </p>
-          <p className="stat-value success">{stave.successRate}%</p>
-        </article>
-        <article className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            Registry views
-          </p>
-          <p className="stat-value">{stave.viewsCount.toLocaleString()}</p>
-        </article>
-        <article className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            Popularity
-          </p>
-          <p className="stat-value">{stave.popularityScore}</p>
-        </article>
-        <article className="card">
-          <p className="muted" style={{ margin: 0 }}>
-            Published
-          </p>
-          <p className="stat-value" style={{ fontSize: "0.95rem" }}>
-            {new Date(stave.publishedAt).toLocaleDateString()}
-          </p>
-        </article>
-      </section>
-
-      <div className="stave-tags" style={{ marginTop: "0.5rem" }}>
-        {stave.tags.map((tag) => (
-          <span key={`${stave.id}-${tag}`} className="tag">
-            {tag}
-          </span>
-        ))}
-      </div>
-
-      <section className="stave-community panel-stack">
-        <div className="stave-actions-row">
+      <section aria-label="Engagement" className="stack-sm">
+        <div className="stave-actions">
           <div className="stave-vote-group">
             <button
               type="button"
@@ -369,7 +370,7 @@ export function StaveDetailClient({
               disabled={!isLoaded || !isSignedIn || pending}
               aria-pressed={userVote === 1}
             >
-              <ThumbsUp size={14} />
+              <ThumbsUp size={13} />
               {totals.upvotes}
             </button>
             <button
@@ -379,7 +380,7 @@ export function StaveDetailClient({
               disabled={!isLoaded || !isSignedIn || pending}
               aria-pressed={userVote === -1}
             >
-              <ThumbsDown size={14} />
+              <ThumbsDown size={13} />
               {totals.downvotes}
             </button>
           </div>
@@ -389,18 +390,26 @@ export function StaveDetailClient({
             onClick={toggleSave}
             disabled={!isLoaded || !isSignedIn || pending}
           >
-            <Bookmark size={14} />
+            <Bookmark size={13} />
             {saved ? "Saved" : "Save to library"}
           </button>
-          <Link href={grimoireHref} className="stave-action-link">
-            View grimoire
+          <span className="meta-item">
+            <Zap size={12} aria-hidden />
+            {stave.invocations.toLocaleString()} invocations
+          </span>
+          <span className="meta-item">
+            <span className="success-dot" aria-hidden />
+            {stave.successRate}% reliable
+          </span>
+          <Link href={grimoireHref} className="stave-action-link" style={{ marginLeft: "auto" }}>
+            View grimoire →
           </Link>
         </div>
 
         {isLoaded && !isSignedIn ? (
-          <p className="muted">
+          <p className="muted" style={{ fontSize: 12.5 }}>
             <GaldrSignInButton>
-              <button type="button" className="btn-ghost-sm">
+              <button type="button" className="btn btn-ghost btn-sm">
                 Sign in
               </button>
             </GaldrSignInButton>{" "}
@@ -413,12 +422,13 @@ export function StaveDetailClient({
             {error}
           </p>
         ) : null}
+      </section>
 
+      <section aria-label="Comments" className="stack-sm">
         <div className="stave-comments-head">
           <MessageCircle size={14} aria-hidden />
           <span>
-            Comments{" "}
-            <strong>{totals.commentsCount}</strong>
+            Comments <strong>{totals.commentsCount}</strong>
           </span>
         </div>
 
@@ -437,24 +447,29 @@ export function StaveDetailClient({
         </ul>
 
         {isLoaded && isSignedIn ? (
-          <label className="stave-comment-compose">
-            <span className="muted">Add a comment</span>
+          <div className="stave-comment-compose">
+            <label className="label-tiny" htmlFor="comment-input">
+              Add a comment
+            </label>
             <textarea
-              className="input stave-comment-input"
+              id="comment-input"
+              className="textarea"
               rows={4}
               value={commentDraft}
               onChange={(e) => setCommentDraft(e.target.value)}
               placeholder="Invocation notes, bindings that worked, warnings..."
             />
-            <button
-              type="button"
-              className="btn"
-              onClick={submitComment}
-              disabled={pending || !commentDraft.trim()}
-            >
-              Post
-            </button>
-          </label>
+            <div>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={submitComment}
+                disabled={pending || !commentDraft.trim()}
+              >
+                Post comment
+              </button>
+            </div>
+          </div>
         ) : null}
       </section>
     </div>

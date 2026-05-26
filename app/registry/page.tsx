@@ -13,53 +13,16 @@ export default function RegistryPage() {
 
   const filteredStaves = useMemo(() => {
     const lowered = query.trim().toLowerCase();
-
     return staves.filter((stave) => {
       const textMatch =
         lowered.length === 0 ||
         stave.title.toLowerCase().includes(lowered) ||
         stave.scribe.toLowerCase().includes(lowered) ||
         stave.tags.some((tag) => tag.toLowerCase().includes(lowered));
-
       const tagMatch = selectedTag === "all" || stave.tags.includes(selectedTag);
-
       return textMatch && tagMatch;
     });
   }, [query, selectedTag]);
-
-  const popularStaves = useMemo(
-    () =>
-      [...filteredStaves]
-        .sort((a, b) => {
-          if (b.popularityScore !== a.popularityScore) {
-            return b.popularityScore - a.popularityScore;
-          }
-          if (b.viewsCount !== a.viewsCount) {
-            return b.viewsCount - a.viewsCount;
-          }
-          return b.upvotes - a.upvotes;
-        })
-        .slice(0, 6),
-    [filteredStaves],
-  );
-
-  const mostUpvotedRecentStaves = useMemo(
-    () =>
-      [...filteredStaves]
-        .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt))
-        .slice(0, 6)
-        .sort((a, b) => {
-          const aVoteDelta = a.upvotes - a.downvotes;
-          const bVoteDelta = b.upvotes - b.downvotes;
-
-          if (bVoteDelta !== aVoteDelta) {
-            return bVoteDelta - aVoteDelta;
-          }
-
-          return b.upvotes - a.upvotes;
-        }),
-    [filteredStaves],
-  );
 
   const registryFeed = useMemo(
     () =>
@@ -75,133 +38,128 @@ export default function RegistryPage() {
   const topScribes = useMemo(() => {
     const map = new Map<string, { name: string; staves: number; score: number }>();
     filteredStaves.forEach((stave) => {
-      const existing = map.get(stave.scribe) ?? { name: stave.scribe, staves: 0, score: 0 };
+      const existing = map.get(stave.scribe) ?? {
+        name: stave.scribe,
+        staves: 0,
+        score: 0,
+      };
       existing.staves += 1;
       existing.score += stave.popularityScore + Math.floor(stave.upvotes / 20);
       map.set(stave.scribe, existing);
     });
-
-    return [...map.values()].sort((a, b) => b.score - a.score).slice(0, 5);
+    return [...map.values()].sort((a, b) => b.score - a.score).slice(0, 6);
   }, [filteredStaves]);
 
   const trendingTags = useMemo(() => {
     const map = new Map<string, number>();
     filteredStaves.forEach((stave) => {
-      stave.tags.forEach((tag) => {
-        map.set(tag, (map.get(tag) ?? 0) + 1);
-      });
+      stave.tags.forEach((tag) => map.set(tag, (map.get(tag) ?? 0) + 1));
     });
-    return [...map.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8);
+    return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
   }, [filteredStaves]);
 
   return (
-    <section className="container page-block panel-stack">
-      <div className="registry-gallery-head">
-        <div>
-          <p className="registry-headstone-kicker">Galdr Community Gallery</p>
-          <h1 className="section-title">Registry</h1>
-          <p className="registry-gallery-note muted">
-            Discover popular staves, track active scribes, and browse the latest upvoted
-            work from the ritual feed.
+    <>
+      <section className="page-hero" aria-labelledby="registry-title">
+        <div className="container">
+          <p className="page-hero-tag">Browse the registry</p>
+          <h1 id="registry-title" className="page-hero-title">
+            Every stave. Every scribe.
+          </h1>
+          <p className="page-hero-sub">
+            Filter by tag, search by intent, and rank by what the community is
+            running today.
           </p>
         </div>
-        <span className="muted">{filteredStaves.length} staves in feed</span>
-      </div>
+      </section>
 
-      <div className="registry-toolbar-row">
-        <div className="registry-search-wrap">
-          <Search size={16} className="registry-search-icon" />
-          <input
-            className="input with-icon"
-            placeholder="Search staves, scribes, tags..."
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            aria-label="Search staves"
-          />
+      <div className="container">
+        <div className="toolbar-row">
+          <div className="search-bar" role="search">
+            <Search size={16} aria-hidden />
+            <input
+              type="search"
+              placeholder="Search staves, scribes, tags..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search staves"
+            />
+          </div>
+
+          <select
+            className="select"
+            style={{ maxWidth: 200 }}
+            value={selectedTag}
+            onChange={(e) => setSelectedTag(e.target.value)}
+            aria-label="Filter by tag"
+          >
+            <option value="all">All tags</option>
+            {allTags.map((tag) => (
+              <option key={tag} value={tag}>
+                {tag}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <select
-          className="select"
-          value={selectedTag}
-          onChange={(event) => setSelectedTag(event.target.value)}
-          aria-label="Filter by tag"
-        >
-          <option value="all">All tags</option>
-          {allTags.map((tag) => (
-            <option key={tag} value={tag}>
-              {tag}
-            </option>
-          ))}
-        </select>
-      </div>
+        <div className="section-head">
+          <h2>Featured feed</h2>
+          <span className="muted">{filteredStaves.length} staves</span>
+        </div>
 
-      <div id="registry-feed" className="registry-layout">
-        <section className="registry-main-feed" aria-labelledby="registry-feed-title">
-          <div className="section-head section-head-tight">
-            <h2 id="registry-feed-title" className="section-title section-title-feed">
-              Featured Feed
-            </h2>
-            <span className="muted">Ranked by popularity, votes, and discussion</span>
+        <div className="col-grid" style={{ paddingTop: 16 }}>
+          <div>
+            {registryFeed.length === 0 ? (
+              <div style={{ padding: "48px 0", textAlign: "center" }}>
+                <p className="muted">No staves match this search.</p>
+              </div>
+            ) : (
+              <div className="stave-grid">
+                {registryFeed.map((stave) => (
+                  <StaveCard key={`feed-${stave.id}`} stave={stave} />
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="registry-feed-grid">
-            {registryFeed.map((stave) => (
-              <StaveCard key={`feed-${stave.id}`} stave={stave} />
-            ))}
-          </div>
-        </section>
+          <aside className="stack" style={{ gap: 16 }}>
+            <section className="side-card">
+              <h3 className="side-card-title">Trending tags</h3>
+              <div className="side-card-tags">
+                {trendingTags.map(([tag, count]) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    className="tag"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setSelectedTag(tag)}
+                  >
+                    {tag} <span className="chip-count">{count}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
 
-        <aside className="registry-side-rail" aria-label="Registry side rail">
-          <section className="registry-rail-card">
-            <h3>Trending tags</h3>
-            <div className="registry-rail-tags">
-              {trendingTags.map(([tag, count]) => (
-                <span key={tag} className="tag">
-                  #{tag} ({count})
-                </span>
-              ))}
-            </div>
-          </section>
-
-          <section className="registry-rail-card">
-            <h3>Top scribes</h3>
-            <ul className="registry-rail-list">
-              {topScribes.map((scribe) => (
-                <li key={scribe.name}>
-                  <span>{scribe.name}</span>
-                  <small>{scribe.staves} staves</small>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="registry-rail-card">
-            <h3>Today&apos;s spotlight</h3>
-            <ul className="registry-rail-list">
-              {popularStaves.slice(0, 2).map((stave) => (
-                <li key={`popular-spotlight-${stave.id}`}>
-                  <span>{stave.title}</span>
-                  <small>{stave.popularityScore} popularity</small>
-                </li>
-              ))}
-              {mostUpvotedRecentStaves.slice(0, 2).map((stave) => (
-                <li key={`recent-spotlight-${stave.id}`}>
-                  <span>{stave.title}</span>
-                  <small>{stave.upvotes - stave.downvotes} vote delta</small>
-                </li>
-              ))}
-            </ul>
-          </section>
-        </aside>
+            <section className="side-card">
+              <h3 className="side-card-title">Top scribes</h3>
+              <ul className="side-card-list">
+                {topScribes.map((scribe) => (
+                  <li key={scribe.name}>
+                    <span>{scribe.name}</span>
+                    <small>{scribe.staves} staves</small>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </aside>
+        </div>
       </div>
 
-      {filteredStaves.length === 0 ? (
-        <p className="muted">
-          No staves found in the gallery. Try a different search rune.
-        </p>
-      ) : null}
-    </section>
+      <footer className="footer">
+        <div className="container">
+          <span>© 2026 Galdr — Open agent registry</span>
+        </div>
+      </footer>
+    </>
   );
 }

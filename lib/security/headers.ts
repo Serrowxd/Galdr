@@ -13,12 +13,11 @@ function buildContentSecurityPolicy(): string {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "img-src 'self' data: https://img.clerk.com https://*.clerk.com",
+    "img-src 'self' data: https://*.githubusercontent.com https://*.googleusercontent.com https://secure.gravatar.com https://*.gravatar.com https://*.gitlab.com https://gitlab.com",
     "object-src 'none'",
-    `script-src 'self' 'unsafe-inline'${scriptDev} https://*.clerk.com https://*.clerk.accounts.dev`,
+    `script-src 'self' 'unsafe-inline'${scriptDev}`,
     "style-src 'self' 'unsafe-inline'",
-    "connect-src 'self' https://*.clerk.com https://*.clerk.accounts.dev",
-    "frame-src https://*.clerk.com https://*.clerk.accounts.dev",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
     "worker-src 'self' blob:",
   ].join("; ");
 }
