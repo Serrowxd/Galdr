@@ -273,46 +273,56 @@ export function ProfileSettings() {
   return (
     <article className="surface surface-padded profile-panel">
       <div className="profile-subsection">
-        <h3 className="profile-subsection-title">Identity</h3>
+        <div className="profile-subsection-head">
+          <h3 className="profile-subsection-title">Identity</h3>
+          <p className="profile-subsection-desc">
+            Your public name and picture across Galdr.
+          </p>
+        </div>
 
-        <div className="profile-grid">
-          <div className="profile-field-group profile-col-full">
+        <div className="profile-fields">
+          <div className="profile-field-group">
             <span className="label-tiny">Profile picture</span>
             <div className="profile-avatar-row">
               {avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img className="profile-avatar" src={avatarUrl} alt="Your profile picture" />
+                <img className="profile-pic" src={avatarUrl} alt="Your profile picture" />
               ) : (
-                <span className="profile-avatar-fallback" aria-hidden>
+                <span className="profile-pic-fallback" aria-hidden>
                   {avatarInitial}
                 </span>
               )}
-              <div className="profile-avatar-actions">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) => void handleAvatarFile(e)}
-                />
-                <button
-                  type="button"
-                  className="btn btn-soft btn-sm"
-                  disabled={avatarBusy}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {avatarBusy ? "Working…" : avatarUrl ? "Change picture" : "Upload picture"}
-                </button>
-                {avatarUrl ? (
+              <div className="profile-avatar-meta">
+                <div className="profile-avatar-actions">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={(e) => void handleAvatarFile(e)}
+                  />
                   <button
                     type="button"
                     className="btn btn-soft btn-sm"
                     disabled={avatarBusy}
-                    onClick={() => void handleRemoveAvatar()}
+                    onClick={() => fileInputRef.current?.click()}
                   >
-                    Remove
+                    {avatarBusy ? "Working…" : avatarUrl ? "Change picture" : "Upload picture"}
                   </button>
-                ) : null}
+                  {avatarUrl ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      disabled={avatarBusy}
+                      onClick={() => void handleRemoveAvatar()}
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+                <span className="profile-avatar-hint">
+                  PNG, JPG, WebP or GIF — up to 2 MB.
+                </span>
               </div>
             </div>
             {avatarError ? (
@@ -323,63 +333,63 @@ export function ProfileSettings() {
           </div>
 
           <div className="profile-field-group">
-            <label className="stack-sm profile-field" htmlFor="profile-username">
-              <span className="label-tiny">Username</span>
-              <div className="modal-field-row">
-                <input
-                  id="profile-username"
-                  className="input"
-                  autoComplete="username"
-                  spellCheck={false}
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  aria-invalid={validation.ok ? undefined : true}
-                  aria-describedby="profile-username-status profile-username-hint"
-                />
-                <span
-                  id="profile-username-status"
-                  className="modal-status"
-                  aria-live="polite"
-                >
-                  {usernameChanged && !validation.ok ? (
-                    <span className="status-msg">{validation.message}</span>
-                  ) : displayedAvailability === "loading" ? (
-                    <Loader2 className="status-loading" size={18} aria-label="Checking" />
-                  ) : displayedAvailability === "available" ? (
-                    <span className="status-available">
-                      <Check size={18} aria-hidden />
-                      <span className="sr-only">Available</span>
-                    </span>
-                  ) : displayedAvailability === "taken" ? (
-                    <span className="status-taken">
-                      <X size={18} aria-hidden />
-                      <span className="sr-only">Taken</span>
-                    </span>
-                  ) : displayedAvailability === "error" ? (
-                    <span className="status-msg">Could not check</span>
-                  ) : null}
-                </span>
-              </div>
+            <label className="label-tiny" htmlFor="profile-username">
+              Username
             </label>
+            <div className="modal-field-row">
+              <input
+                id="profile-username"
+                className="input"
+                autoComplete="username"
+                spellCheck={false}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                aria-invalid={validation.ok ? undefined : true}
+                aria-describedby="profile-username-status profile-username-hint"
+              />
+              <span
+                id="profile-username-status"
+                className="modal-status"
+                aria-live="polite"
+              >
+                {usernameChanged && !validation.ok ? (
+                  <span className="status-msg">{validation.message}</span>
+                ) : displayedAvailability === "loading" ? (
+                  <Loader2 className="status-loading" size={18} aria-label="Checking" />
+                ) : displayedAvailability === "available" ? (
+                  <span className="status-available">
+                    <Check size={18} aria-hidden />
+                    <span className="sr-only">Available</span>
+                  </span>
+                ) : displayedAvailability === "taken" ? (
+                  <span className="status-taken">
+                    <X size={18} aria-hidden />
+                    <span className="sr-only">Taken</span>
+                  </span>
+                ) : displayedAvailability === "error" ? (
+                  <span className="status-msg">Could not check</span>
+                ) : null}
+              </span>
+            </div>
             <p id="profile-username-hint" className="modal-hint">
               Letters, underscores, and hyphens only. Minimum 4 characters.
             </p>
           </div>
 
           <div className="profile-field-group">
-            <label className="stack-sm profile-field" htmlFor="profile-bio">
-              <span className="label-tiny">Bio</span>
-              <textarea
-                id="profile-bio"
-                className="input profile-bio-input"
-                rows={4}
-                maxLength={BIO_MAX_LENGTH}
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                placeholder="A short line about you."
-              />
+            <label className="label-tiny" htmlFor="profile-bio">
+              Bio
             </label>
-            <p className="modal-hint profile-bio-count">
+            <textarea
+              id="profile-bio"
+              className="input profile-bio-input"
+              rows={4}
+              maxLength={BIO_MAX_LENGTH}
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder="A short line about you."
+            />
+            <p className="profile-bio-count">
               {bio.length}/{BIO_MAX_LENGTH}
             </p>
           </div>
@@ -391,7 +401,7 @@ export function ProfileSettings() {
           </p>
         ) : null}
 
-        <div className="row" style={{ marginTop: 12, gap: 12, flexWrap: "wrap" }}>
+        <div className="profile-actions">
           <button
             className="btn btn-primary btn-sm"
             type="button"

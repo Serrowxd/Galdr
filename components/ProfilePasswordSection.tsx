@@ -59,12 +59,14 @@ export function ProfilePasswordSection({ email, hasPassword }: ProfilePasswordSe
 
   return (
     <div className="profile-subsection">
-      <h3 className="profile-subsection-title">Password</h3>
-      <p className="muted">
-        {hasPassword
-          ? "Change your password, or email yourself a reset link."
-          : "Set a password so you can sign in with email as well as OAuth."}
-      </p>
+      <div className="profile-subsection-head">
+        <h3 className="profile-subsection-title">Password</h3>
+        <p className="profile-subsection-desc">
+          {hasPassword
+            ? "Change your password, or email yourself a reset link."
+            : "Set a password so you can sign in with email as well as OAuth."}
+        </p>
+      </div>
 
       {error ? (
         <p className="auth-msg auth-msg-error" role="alert">

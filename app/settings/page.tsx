@@ -48,7 +48,7 @@ export default function SettingsPage() {
           <ProfileSettings />
         </div>
 
-        <div style={{ display: "grid", gap: 16, maxWidth: 560, marginTop: 32 }}>
+        <div style={{ display: "grid", gap: 16, maxWidth: 640, marginTop: 32 }}>
           <h2 style={{ fontSize: 14, fontWeight: 500 }}>AI defaults</h2>
           <article className="surface surface-padded stack-sm">
             <h2 style={{ fontSize: 14, fontWeight: 500 }}>AI provider</h2>

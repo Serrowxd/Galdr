@@ -88,11 +88,13 @@ export function ConnectedAccountsSection({ hasPassword }: ConnectedAccountsSecti
 
   return (
     <div className="profile-subsection">
-      <h3 className="profile-subsection-title">Connected accounts</h3>
-      <p className="muted">
-        Link OAuth providers you can sign in with. You can&apos;t remove your last
-        sign-in method.
-      </p>
+      <div className="profile-subsection-head">
+        <h3 className="profile-subsection-title">Connected accounts</h3>
+        <p className="profile-subsection-desc">
+          Link OAuth providers you can sign in with. You can&apos;t remove your last
+          sign-in method.
+        </p>
+      </div>
 
       {error ? (
         <p className="auth-msg auth-msg-error" role="alert">
