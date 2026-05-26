@@ -6,6 +6,7 @@ import {
   loadGlobalAISettings,
   saveGlobalAISettings,
 } from "@/lib/globalSettings";
+import { ProfileSettings } from "@/components/ProfileSettings";
 
 const providerOptions: { value: AIProvider; label: string }[] = [
   { value: "openai", label: "OpenAI" },
@@ -36,14 +37,19 @@ export default function SettingsPage() {
             Settings.
           </h1>
           <p className="page-hero-sub">
-            Global AI provider defaults. Set them once and the Loom will reuse them
-            for quality checks and pseudo-runs.
+            Edit your profile and manage global AI provider defaults.
           </p>
         </div>
       </section>
 
       <div className="container" style={{ paddingTop: 32, paddingBottom: 48 }}>
-        <div style={{ display: "grid", gap: 16, maxWidth: 560 }}>
+        <div style={{ display: "grid", gap: 16 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 500 }}>Profile</h2>
+          <ProfileSettings />
+        </div>
+
+        <div style={{ display: "grid", gap: 16, maxWidth: 640, marginTop: 32 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 500 }}>AI defaults</h2>
           <article className="surface surface-padded stack-sm">
             <h2 style={{ fontSize: 14, fontWeight: 500 }}>AI provider</h2>
             <p className="muted" style={{ fontSize: 12.5, lineHeight: 1.6 }}>

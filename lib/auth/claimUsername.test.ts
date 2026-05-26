@@ -43,4 +43,31 @@ describe("claimUsername", () => {
     expect(res).toEqual({ ok: true, username: "Bragi" });
     expect(insertValues).toHaveBeenCalledWith({ userId: "user-1", username: "Bragi" });
   });
+
+  it("leaves bio untouched when the bio arg is omitted", async () => {
+    const { db, insertValues } = makeFakeDb({ conflict: false });
+    await claimUsername(db, "user-1", "Bragi");
+    expect(insertValues).toHaveBeenCalledWith({ userId: "user-1", username: "Bragi" });
+  });
+
+  it("normalizes and includes bio when provided", async () => {
+    const { db, insertValues } = makeFakeDb({ conflict: false });
+    const res = await claimUsername(db, "user-1", "Bragi", "  skald of the north  ");
+    expect(res).toEqual({ ok: true, username: "Bragi" });
+    expect(insertValues).toHaveBeenCalledWith({
+      userId: "user-1",
+      username: "Bragi",
+      bio: "skald of the north",
+    });
+  });
+
+  it("stores an empty bio as null (clears it)", async () => {
+    const { db, insertValues } = makeFakeDb({ conflict: false });
+    await claimUsername(db, "user-1", "Bragi", "   ");
+    expect(insertValues).toHaveBeenCalledWith({
+      userId: "user-1",
+      username: "Bragi",
+      bio: null,
+    });
+  });
 });

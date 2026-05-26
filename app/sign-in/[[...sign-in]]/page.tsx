@@ -7,12 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { safeNext } from "@/lib/auth/safeNext";
 import { VegvisirLogo } from "@/components/VegvisirLogo";
 import type { Provider } from "@supabase/supabase-js";
-
-const PROVIDERS: { id: Provider; label: string }[] = [
-  { id: "github", label: "Continue with GitHub" },
-  { id: "google", label: "Continue with Google" },
-  { id: "gitlab", label: "Continue with GitLab" },
-];
+import { GALDR_OAUTH_PROVIDERS } from "@/lib/auth/oauthProviders";
 
 export default function SignInPage() {
   return (
@@ -125,14 +120,14 @@ function SignInPageInner() {
         {info && <p className="auth-msg auth-msg-info">{info}</p>}
 
         <div className="auth-providers">
-          {PROVIDERS.map(({ id, label }) => (
+          {GALDR_OAUTH_PROVIDERS.map(({ id, label }) => (
             <button
               key={id}
               type="button"
               className="btn btn-soft btn-block"
               onClick={() => void handleOAuth(id)}
             >
-              {label}
+              Continue with {label}
             </button>
           ))}
         </div>
@@ -160,7 +155,7 @@ function SignInPageInner() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
-              <button type="submit" className="btn btn-block" disabled={loading}>
+              <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
                 {loading ? "Signing in…" : "Sign in"}
               </button>
               {unconfirmed && (

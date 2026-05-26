@@ -895,12 +895,20 @@ textarea {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
+  /* Render the native option popup with a dark palette so it doesn't fall back
+   * to the OS light theme (washed-out grey text + a clashing blue highlight). */
+  color-scheme: dark;
   padding-right: 28px;
   background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
     linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
   background-position: calc(100% - 13px) 52%, calc(100% - 9px) 52%;
   background-size: 4px 4px;
   background-repeat: no-repeat;
+}
+
+.select option {
+  background-color: var(--surface-elevated);
+  color: var(--text);
 }
 
 .textarea {
@@ -2130,6 +2138,159 @@ textarea {
 
 .spin {
   animation: pulse 1s ease infinite;
+}
+
+/* =====================================================================
+ * Profile settings
+ * ===================================================================== */
+
+.profile-panel {
+  display: grid;
+  gap: 28px;
+  max-width: 640px;
+}
+
+.profile-subsection {
+  display: grid;
+  gap: 16px;
+}
+
+.profile-subsection + .profile-subsection {
+  padding-top: 24px;
+  border-top: 0.5px solid var(--hairline);
+}
+
+.profile-subsection-head {
+  display: grid;
+  gap: 4px;
+}
+
+.profile-subsection-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.profile-subsection-desc {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* Fields stack in a single readable column so the form reads top-to-bottom
+ * instead of sprawling across the full panel width. */
+.profile-fields {
+  display: grid;
+  gap: 18px;
+}
+
+.profile-field-group {
+  display: grid;
+  gap: 7px;
+}
+
+.profile-bio-input {
+  resize: vertical;
+  min-height: 88px;
+  padding: 11px 13px;
+  font-family: inherit;
+  line-height: 1.55;
+}
+
+.profile-bio-count {
+  text-align: right;
+  font-size: 11.5px;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.profile-pic,
+.profile-pic-fallback {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 0.5px solid var(--hairline-strong);
+  flex-shrink: 0;
+}
+
+.profile-pic-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--accent-tint-12);
+}
+
+.profile-avatar-meta {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-avatar-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.profile-avatar-hint {
+  font-size: 11.5px;
+  color: var(--text-soft);
+}
+
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.profile-password-form {
+  display: grid;
+  gap: 10px;
+  max-width: 360px;
+}
+
+.profile-reset-link {
+  justify-self: start;
+}
+
+.identity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.identity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--hairline);
+  border-radius: 8px;
+}
+
+.identity-provider {
+  font-size: 13px;
+}
+
+.identity-connect {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* =====================================================================

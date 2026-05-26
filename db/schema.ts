@@ -12,6 +12,7 @@ import {
 export const userProfiles = pgTable("user_profiles", {
   userId: uuid("user_id").primaryKey(),
   username: text("username").notNull().unique(),
+  bio: text("bio"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
