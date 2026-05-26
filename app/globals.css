@@ -891,6 +891,14 @@ textarea {
   color: var(--text-faint);
 }
 
+.input:disabled,
+.select:disabled,
+.textarea:disabled {
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: not-allowed;
+}
+
 .input:focus,
 .select:focus,
 .textarea:focus {
@@ -2199,6 +2207,12 @@ textarea {
 .profile-field-group {
   display: grid;
   gap: 7px;
+}
+
+.profile-username-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
 }
 
 .profile-bio-input {

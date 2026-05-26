@@ -24,6 +24,9 @@ export function ProfileSettings() {
   const [bio, setBio] = useState("");
   const [initialUsername, setInitialUsername] = useState("");
   const [initialBio, setInitialBio] = useState("");
+  // Username is locked (grayed) by default; the "Change username" button unlocks
+  // it, guarding against accidental edits to a stable public identity.
+  const [editingUsername, setEditingUsername] = useState(false);
 
   const [availability, setAvailability] = useState<AvailabilityState>("idle");
   const availSeq = useRef(0);
@@ -147,6 +150,7 @@ export function ProfileSettings() {
       setInitialBio(bio);
       setUsername(validation.value);
       setAvailability("idle");
+      setEditingUsername(false);
       setSavedNotice("Profile saved.");
       setTimeout(() => setSavedNotice(""), 1800);
     } catch (err) {
@@ -154,6 +158,14 @@ export function ProfileSettings() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // Abandon an in-progress username edit: revert to the saved value and re-lock.
+  function cancelUsernameEdit() {
+    setUsername(initialUsername);
+    setAvailability("idle");
+    setEditingUsername(false);
+    setError(null);
   }
 
   const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
@@ -365,43 +377,71 @@ export function ProfileSettings() {
                 autoComplete="username"
                 spellCheck={false}
                 value={username}
+                disabled={!editingUsername}
                 onChange={(e) => setUsername(e.target.value)}
-                aria-invalid={validation.ok ? undefined : true}
+                aria-invalid={editingUsername && !validation.ok ? true : undefined}
                 aria-describedby="profile-username-status profile-username-hint"
               />
-              <span
-                id="profile-username-status"
-                className="modal-status"
-                aria-live="polite"
-              >
-                {displayedAvailability === "loading" ? (
-                  <Loader2 className="status-loading" size={18} aria-label="Checking" />
-                ) : displayedAvailability === "available" ? (
-                  <span className="status-available">
-                    <Check size={18} aria-hidden />
-                    <span className="sr-only">Available</span>
-                  </span>
-                ) : displayedAvailability === "taken" ? (
-                  <span className="status-taken">
-                    <X size={18} aria-hidden />
-                    <span className="sr-only">Taken</span>
-                  </span>
-                ) : null}
-              </span>
+              {editingUsername ? (
+                <span
+                  id="profile-username-status"
+                  className="modal-status"
+                  aria-live="polite"
+                >
+                  {displayedAvailability === "loading" ? (
+                    <Loader2 className="status-loading" size={18} aria-label="Checking" />
+                  ) : displayedAvailability === "available" ? (
+                    <span className="status-available">
+                      <Check size={18} aria-hidden />
+                      <span className="sr-only">Available</span>
+                    </span>
+                  ) : displayedAvailability === "taken" ? (
+                    <span className="status-taken">
+                      <X size={18} aria-hidden />
+                      <span className="sr-only">Taken</span>
+                    </span>
+                  ) : null}
+                </span>
+              ) : null}
             </div>
-            {usernameChanged && !validation.ok ? (
-              <p id="profile-username-hint" className="modal-hint modal-hint-error">
-                {validation.message}
-              </p>
-            ) : displayedAvailability === "error" ? (
-              <p id="profile-username-hint" className="modal-hint modal-hint-error">
-                Could not check that username. Try again.
-              </p>
+
+            {editingUsername ? (
+              <>
+                {usernameChanged && !validation.ok ? (
+                  <p id="profile-username-hint" className="modal-hint modal-hint-error">
+                    {validation.message}
+                  </p>
+                ) : displayedAvailability === "error" ? (
+                  <p id="profile-username-hint" className="modal-hint modal-hint-error">
+                    Could not check that username. Try again.
+                  </p>
+                ) : (
+                  <p id="profile-username-hint" className="modal-hint">
+                    Letters, numbers, underscores, and hyphens only. Minimum 4
+                    characters.
+                  </p>
+                )}
+                <div className="profile-username-actions">
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={cancelUsernameEdit}
+                    disabled={saving}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
             ) : (
-              <p id="profile-username-hint" className="modal-hint">
-                Letters, numbers, underscores, and hyphens only. Minimum 4
-                characters.
-              </p>
+              <div className="profile-username-actions">
+                <button
+                  type="button"
+                  className="btn btn-soft btn-sm"
+                  onClick={() => setEditingUsername(true)}
+                >
+                  Change username
+                </button>
+              </div>
             )}
           </div>
 
