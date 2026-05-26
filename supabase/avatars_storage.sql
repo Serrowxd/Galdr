@@ -3,10 +3,12 @@
 -- the app uses; bucket + policies live in the `storage` schema).
 --
 -- Files are stored as "<auth-user-id>/avatar-<timestamp>.<ext>" so each user can
--- only write inside their own folder. The bucket is public, so the
+-- only read/write inside their own folder. The bucket is public, so the
 -- /object/public/... URLs work in <img> tags without any SELECT policy or signed
--- URLs. We deliberately do NOT add a broad SELECT policy: it isn't needed for URL
--- access and would let anyone list the bucket (enumerating every user's id).
+-- URLs. We deliberately do NOT add a *broad* SELECT policy (it would let anyone
+-- list the bucket and enumerate every user's id); instead each user gets a SELECT
+-- policy scoped to their own folder, which the app needs to list + clean up a
+-- user's previous avatars (see removeAvatarFiles in components/ProfileSettings.tsx).
 
 -- 1. Create (or update) the bucket with a hard size limit + image-only MIME types.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -23,9 +25,20 @@ on conflict (id) do update set
   allowed_mime_types = excluded.allowed_mime_types;
 
 -- 2. Row-level security policies on storage.objects, scoped to the avatars bucket.
--- No SELECT policy: public buckets serve objects without one, and adding a broad
--- read policy would expose a listing of every file (and thus every user id).
+-- No *broad* SELECT policy (it would expose a listing of every file, and thus
+-- every user id); the old "publicly readable" policy is dropped if present.
 drop policy if exists "Avatar images are publicly readable" on storage.objects;
+
+-- Each user may list/read only their own folder. Needed so the app can find and
+-- delete a user's previous avatars; public <img> URLs don't rely on this.
+drop policy if exists "Users can list their own avatars" on storage.objects;
+create policy "Users can list their own avatars"
+  on storage.objects for select
+  to authenticated
+  using (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = (select auth.uid()::text)
+  );
 
 drop policy if exists "Users can upload their own avatar" on storage.objects;
 create policy "Users can upload their own avatar"
