@@ -13,6 +13,9 @@ export const userProfiles = pgTable("user_profiles", {
   userId: uuid("user_id").primaryKey(),
   username: text("username").notNull().unique(),
   bio: text("bio"),
+  // Public avatar URL, mirrored here (canonical for display) so any visitor can
+  // render a scribe's picture without reading another user's auth metadata.
+  avatarUrl: text("avatar_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

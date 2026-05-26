@@ -16,16 +16,25 @@ type UserAccountMenuProps = {
 export function UserAccountMenu({ user }: UserAccountMenuProps) {
   const [open, setOpen] = useState(false);
   const [profileUsername, setProfileUsername] = useState<string | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   useEffect(() => {
     let active = true;
     void (async () => {
-      const res = await fetch("/api/profile", { credentials: "include" });
-      if (!active || !res.ok) return;
-      const data = (await res.json()) as { username?: string | null };
-      setProfileUsername(data.username ?? null);
+      try {
+        const res = await fetch("/api/profile", { credentials: "include" });
+        if (!active || !res.ok) return;
+        const data = (await res.json()) as { username?: string | null };
+        if (active) setProfileUsername(data.username ?? null);
+      } catch {
+        // Ignore — fall back to the metadata/email-derived label below.
+      } finally {
+        // Mark settled either way so the name skeleton resolves to a label
+        // instead of flashing the email local-part before the fetch returns.
+        if (active) setProfileLoaded(true);
+      }
     })();
     return () => {
       active = false;
@@ -48,14 +57,12 @@ export function UserAccountMenu({ user }: UserAccountMenuProps) {
     };
   }, [open]);
 
-  const email = user.email ?? "";
-  const emailLocal = email.split("@")[0] ?? "";
-  const label =
-    profileUsername ??
-    (user.user_metadata?.preferred_username as string | undefined) ??
-    (user.user_metadata?.user_name as string | undefined) ??
-    emailLocal ??
-    "Scribe";
+  // The claimed username (user_profiles) is the single source of truth for how
+  // we address a user. We deliberately do NOT fall back to email local-parts or
+  // OAuth-provided names — onboarding forces a username, so the only states are
+  // "loading" (skeleton) and the real username. "Scribe" is a defensive last
+  // resort that should never surface in practice.
+  const label = profileUsername ?? "Scribe";
 
   const avatarUrl = user.user_metadata?.avatar_url as string | undefined;
   const avatarInitial = Array.from(label.trim())[0]?.toUpperCase() ?? "?";
@@ -94,7 +101,11 @@ export function UserAccountMenu({ user }: UserAccountMenuProps) {
             {avatarInitial}
           </span>
         )}
-        <span className="user-name">{label}</span>
+        {profileLoaded ? (
+          <span className="user-name">{label}</span>
+        ) : (
+          <span className="user-name-skel" aria-hidden />
+        )}
         <ChevronDown
           size={13}
           className={`user-chevron ${open ? "is-open" : ""}`}

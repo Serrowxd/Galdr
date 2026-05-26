@@ -4,15 +4,17 @@ import { NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { applySecurityHeaders } from "@/lib/security/headers";
 
+// Only PAGE routes belong here: anonymous users are redirected to /sign-in.
+//
+// API routes are intentionally NOT listed. Each one self-guards with its own
+// auth check and returns a 401 JSON. Redirecting them here instead issues a 307
+// to the HTML /sign-in page that preserves the request method — the browser
+// then re-POSTs to a page route with no POST handler and gets a confusing 404
+// (this is exactly what broke save/vote). Let the handlers return clean 401s.
 const PROTECTED_ROUTES = [
   /^\/library(\/.*)?$/,
   /^\/grimoire(\/.*)?$/,
   /^\/settings(\/.*)?$/,
-  /^\/api\/staves\/[^/]+\/vote$/,
-  /^\/api\/staves\/[^/]+\/save$/,
-  // NOTE: /api/staves/[id]/comments is intentionally NOT listed — its GET is
-  // public and the POST handler self-guards with its own auth check.
-  /^\/api\/username\/(?!available$)/,
 ];
 
 function isProtected(pathname: string): boolean {

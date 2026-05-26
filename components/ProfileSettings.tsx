@@ -215,6 +215,9 @@ export function ProfileSettings() {
       });
       if (updateError) throw updateError;
 
+      // Mirror onto the public profile row so other visitors can see it.
+      await persistAvatarUrl(publicUrl);
+
       // Drop any previous avatars so a user's folder holds only the current one.
       await removeAvatarFiles(supabase, fileName);
 
@@ -225,6 +228,21 @@ export function ProfileSettings() {
       );
     } finally {
       setAvatarBusy(false);
+    }
+  }
+
+  // Mirror the avatar URL onto the public profile row (server-side, via drizzle).
+  // Best-effort: a failure here doesn't block the storage/auth update.
+  async function persistAvatarUrl(url: string | null) {
+    try {
+      await fetch("/api/profile/avatar", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ avatarUrl: url }),
+      });
+    } catch {
+      // Ignore — the auth metadata is still updated; profile mirror can lag.
     }
   }
 
@@ -253,6 +271,7 @@ export function ProfileSettings() {
         data: { avatar_url: null },
       });
       if (updateError) throw updateError;
+      await persistAvatarUrl(null);
       setAvatarUrl(null);
     } catch (err) {
       setAvatarError(
