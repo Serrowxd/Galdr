@@ -123,23 +123,13 @@ export function NavBar() {
           {!isLoaded ? (
             <span className="user-skel" aria-hidden />
           ) : user ? (
-            <>
-              <Link href="/loom" className="btn btn-primary btn-sm">
-                Publish stave
-              </Link>
-              <UserAccountMenu user={user} />
-            </>
+            <UserAccountMenu user={user} />
           ) : (
-            <>
-              <GaldrSignInButton>
-                <button type="button" className="btn btn-ghost btn-sm">
-                  Sign in
-                </button>
-              </GaldrSignInButton>
-              <Link href="/loom" className="btn btn-primary btn-sm">
-                Publish stave
-              </Link>
-            </>
+            <GaldrSignInButton>
+              <button type="button" className="btn btn-ghost btn-sm">
+                Sign in
+              </button>
+            </GaldrSignInButton>
           )}
         </div>
       </div>

@@ -1,12 +1,57 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 
 import { StaveCard } from "@/components/StaveCard";
 import { getDbOptional } from "@/db";
 import { listSavedStaveIds } from "@/lib/staveEngagement";
 import { createClient } from "@/lib/supabase/server";
-import { getStavesByIds, type Stave } from "@/lib/staves";
+import { getStavesByAuthor, getStavesByIds, type Stave } from "@/lib/staves";
 
 export const dynamic = "force-dynamic";
+
+/** Collapse a version chain to its latest published version per family. */
+function latestPerFamily(staves: Stave[]): Stave[] {
+  const byFamily = new Map<string, Stave>();
+  for (const s of staves) {
+    const current = byFamily.get(s.familyId);
+    if (!current || s.version > current.version) byFamily.set(s.familyId, s);
+  }
+  return [...byFamily.values()].sort((a, b) => {
+    const at = a.publishedAt ? a.publishedAt.getTime() : 0;
+    const bt = b.publishedAt ? b.publishedAt.getTime() : 0;
+    return bt - at;
+  });
+}
+
+function Shelf({
+  title,
+  hint,
+  staves,
+}: {
+  title: string;
+  hint: ReactNode;
+  staves: Stave[];
+}) {
+  return (
+    <section className="library-shelf">
+      <div className="section-head">
+        <h2>{title}</h2>
+        <span className="muted">
+          {staves.length} {staves.length === 1 ? "stave" : "staves"}
+        </span>
+      </div>
+      {staves.length === 0 ? (
+        <p className="muted library-shelf-empty">{hint}</p>
+      ) : (
+        <div className="stave-grid">
+          {staves.map((stave) => (
+            <StaveCard key={stave.id} stave={stave} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 export default async function LibraryPage() {
   const supabase = await createClient();
@@ -15,10 +60,18 @@ export default async function LibraryPage() {
   } = await supabase.auth.getUser();
   const db = getDbOptional();
 
-  let savedStaves: Stave[] = [];
+  let drafts: Stave[] = [];
+  let published: Stave[] = [];
+  let saved: Stave[] = [];
   if (user && db) {
-    const ids = await listSavedStaveIds(db, user.id);
-    savedStaves = await getStavesByIds(db, ids);
+    const [draftRows, publishedRows, savedIds] = await Promise.all([
+      getStavesByAuthor(db, user.id, { status: "draft" }),
+      getStavesByAuthor(db, user.id, { status: "published" }),
+      listSavedStaveIds(db, user.id),
+    ]);
+    drafts = draftRows;
+    published = latestPerFamily(publishedRows);
+    saved = await getStavesByIds(db, savedIds);
   }
 
   return (
@@ -27,62 +80,58 @@ export default async function LibraryPage() {
         <div className="container">
           <p className="page-hero-tag">Your library</p>
           <h1 id="library-title" className="page-hero-title">
-            Saved staves.
+            Scrolls, drafts, and bookmarks.
           </h1>
           <p className="page-hero-sub">
-            Bookmark staves from the registry to reopen rituals, bindings, and
-            discussion threads from any session.
+            Your own shelf in the archive — staves you&apos;re drafting, the ones
+            you&apos;ve published, and everything you&apos;ve saved from the registry.
           </p>
         </div>
       </section>
 
       <div className="container">
-        <div className="section-head">
-          <h2>Bookmarks</h2>
-          <span className="muted">
-            {user ? `${savedStaves.length} saved staves` : "Sign in to save staves"}
-          </span>
-        </div>
-
-        <div style={{ paddingTop: 20, paddingBottom: 32 }}>
-          {!user ? (
+        {!user ? (
+          <div style={{ paddingTop: 20, paddingBottom: 32 }}>
             <article className="empty-state" aria-live="polite">
               <h2>Sign in required</h2>
               <p>
-                Use <strong>Sign in</strong> in the top bar to bookmark staves from
-                each stave page into your library.
+                Use <strong>Sign in</strong> in the top bar to keep your drafts,
+                published staves, and bookmarks here.
               </p>
             </article>
-          ) : savedStaves.length === 0 ? (
-            <article className="empty-state" aria-live="polite">
-              <h2>No saved staves yet</h2>
-              <p>
-                Browse the <Link href="/">Registry</Link>, open a stave, and choose{" "}
-                <strong>Save to library</strong>.
-              </p>
-              <div className="empty-state-actions">
-                <Link href="/" className="btn btn-soft btn-sm">
-                  Browse registry
-                </Link>
-                <Link href="/loom" className="btn btn-primary btn-sm">
-                  Open the Loom
-                </Link>
-              </div>
-            </article>
-          ) : (
-            <div className="stave-grid">
-              {savedStaves.map((stave) => (
-                <StaveCard key={stave.id} stave={stave} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {user ? (
-          <p className="muted" style={{ padding: "0 0 24px" }}>
-            <Link href="/saga">Your saga →</Link>
-          </p>
-        ) : null}
+          </div>
+        ) : (
+          <div className="library-shelves">
+            <Shelf
+              title="Draft staves"
+              staves={drafts}
+              hint={
+                <>
+                  Staves you&apos;re working on appear here. Start one in the{" "}
+                  <Link href="/loom">Loom</Link> or <Link href="/upload">import a .zip</Link>.
+                </>
+              }
+            />
+            <Shelf
+              title="Published staves"
+              staves={published}
+              hint="Staves you've published to the registry show up here."
+            />
+            <Shelf
+              title="Bookmarks"
+              staves={saved}
+              hint={
+                <>
+                  Open a stave in the <Link href="/">registry</Link> and choose{" "}
+                  <strong>Save to library</strong> to bookmark it here.
+                </>
+              }
+            />
+            <p className="muted" style={{ padding: "4px 0 24px" }}>
+              <Link href="/saga">Your public saga →</Link>
+            </p>
+          </div>
+        )}
       </div>
 
       <footer className="footer">

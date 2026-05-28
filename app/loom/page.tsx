@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck,
   Code2,
@@ -9,15 +10,23 @@ import {
   Eraser,
   ExternalLink,
   FileText,
+  GitFork,
   Heading2,
   Lightbulb,
   List,
+  Lock,
   PlayCircle,
+  Save,
+  Scale,
   ShieldAlert,
   RotateCcw,
+  Send,
   Table,
+  Tag,
   TriangleAlert,
   Trash2,
+  Undo2,
+  Upload,
   Wand2,
 } from "lucide-react";
 import {
@@ -26,16 +35,12 @@ import {
   saveGlobalAISettings,
 } from "@/lib/globalSettings";
 import { renderMarkdownPreview } from "@/lib/markdownPreview";
-
-// Demo terminal output appended to the local analyzer's report until a real
-// runtime lands (spec 02). Loom-only fixture, intentionally inline.
-const loomOutputMock = `> Initializing Stave: Code Reviewer v1.2.3
-> Loading bindings: [eslint-core, ast-parser, vuln-db]
-> Binding check: 3/3 resolved ok
-
-[00:00:01] Parsing input repository...
-[00:00:02] Scanning 14 files across 3 directories
-[00:00:03] AST analysis complete`;
+import { getStaveAnalyzer, type CheckReport } from "@/lib/loom/analyzeStave";
+import { DEFAULT_LICENSE, LICENSES, toLicense } from "@/lib/loom/licenses";
+import { BASELINE_TAGS } from "@/lib/loom/tags";
+import type { License } from "@/lib/staveValidation";
+import { GaldrSignInButton } from "@/components/GaldrSignInButton";
+import { createClient } from "@/lib/supabase/client";
 
 const initialMarkdown = `# Stave: Code Reviewer
 
@@ -88,13 +93,6 @@ Generate release notes from commits and issue metadata.
 `,
 };
 
-type CheckReport = {
-  score: number;
-  errors: string[];
-  warnings: string[];
-  suggestions: string[];
-};
-
 const providerOptions: { value: AIProvider; label: string }[] = [
   { value: "openai", label: "OpenAI" },
   { value: "anthropic", label: "Anthropic" },
@@ -103,58 +101,22 @@ const providerOptions: { value: AIProvider; label: string }[] = [
   { value: "custom", label: "Custom" },
 ];
 
-function analyzeStave(markdown: string): CheckReport {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  const suggestions: string[] = [];
+type ForkBanner = {
+  slug: string | null;
+  title: string;
+  authorUsername: string | null;
+};
 
-  const hasRole = markdown.includes("## Role");
-  const hasInstructions = markdown.includes("## Instructions");
-  const hasConstraints = markdown.includes("## Constraints");
-  const hasOutput = markdown.includes("## Output");
-
-  if (!hasRole) errors.push("Missing required section: ## Role");
-  if (!hasInstructions) errors.push("Missing required section: ## Instructions");
-  if (!hasConstraints) errors.push("Missing required section: ## Constraints");
-
-  const instructionCount = markdown
-    .split("\n")
-    .filter((line) => /^\d+\.\s/.test(line.trim())).length;
-  if (instructionCount < 3) {
-    warnings.push("Instruction list is short; consider adding 3+ explicit directives.");
-  }
-
-  const constraintCount = markdown
-    .split("\n")
-    .filter((line) => line.trim().startsWith("-")).length;
-  if (constraintCount < 2) {
-    warnings.push("Constraints section could be stronger with 2+ guardrails.");
-  }
-
-  if (!hasOutput) {
-    suggestions.push("Add an ## Output section to make responses more deterministic.");
-  }
-
-  if (!/maximum response length|token/i.test(markdown)) {
-    suggestions.push("Specify max response length/tokens for predictable output size.");
-  }
-
-  if (!/example|format/i.test(markdown)) {
-    suggestions.push("Include a concrete response example or format template.");
-  }
-
-  const score = Math.max(
-    0,
-    100 - errors.length * 26 - warnings.length * 11 - suggestions.length * 6,
-  );
-
-  return { score, errors, warnings, suggestions };
+/** Title is parsed from the first H1 in the body; falls back when absent. */
+function deriveTitle(md: string): string {
+  const m = md.match(/^#\s+(.+?)\s*$/m);
+  return m ? m[1].trim() : "Untitled stave";
 }
 
 function buildTerminalLines(report: CheckReport, traceLevel: string): string[] {
   const lines: string[] = [
     `> quality-check profile: ${traceLevel}`,
-    "> mode: pseudo-run (no tool execution)",
+    "> mode: structural analysis (no tool execution)",
     "> parsing stave markdown...",
     `> score computed: ${report.score}/100`,
   ];
@@ -167,12 +129,15 @@ function buildTerminalLines(report: CheckReport, traceLevel: string): string[] {
   report.warnings.forEach((item) => lines.push(`WARN: ${item}`));
   report.suggestions.forEach((item) => lines.push(`SUGGEST: ${item}`));
 
-  lines.push(...loomOutputMock.split("\n").slice(0, 6));
   lines.push("> quality-check complete");
   return lines;
 }
 
-export default function LoomPage() {
+function LoomEditor() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const idParam = searchParams.get("id");
+
   const initialSettings = loadGlobalAISettings();
   const [markdown, setMarkdown] = useState(initialMarkdown);
   const [output, setOutput] = useState("");
@@ -194,35 +159,202 @@ export default function LoomPage() {
   });
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
+  // Draft persistence + authorship intent (spec 02).
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [license, setLicense] = useState<License>(DEFAULT_LICENSE);
+  // Publish metadata, surfaced in the fold-out. `title` overrides the H1-derived
+  // title when non-empty; version is informational (auto-managed by the chain).
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [version, setVersion] = useState(1);
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle",
+  );
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [publishedLock, setPublishedLock] = useState<string | null>(null);
+  const [forkBanner, setForkBanner] = useState<ForkBanner | null>(null);
+
+  // Publish flow (saves the draft first, then locks the slug + goes public).
+  const [showPublish, setShowPublish] = useState(false);
+  const [releaseNotes, setReleaseNotes] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+
+  // Transient toolbar undo (spec: 5-second window after a destructive toolbar
+  // action). Snapshot is the markdown captured *before* the action; we restore
+  // it verbatim on Undo. Designed to be defensive: the timer is cleared on
+  // unmount, fresh keystrokes dismiss the prompt so we never silently overwrite
+  // typed work, and applyUndo type-checks the snapshot before restoring.
+  const [undoState, setUndoState] = useState<{
+    snapshot: string;
+    label: string;
+  } | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isApplyingUndoRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    };
+  }, []);
+
+  const clearUndoTimer = () => {
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+  };
+
+  const dismissUndo = () => {
+    clearUndoTimer();
+    setUndoState(null);
+  };
+
+  // Capture a snapshot of `markdown` BEFORE running `mutate`. Only records the
+  // undo if the mutation actually changed the content, so the prompt is never
+  // misleading. `label` is shown to the user (e.g. "Heading inserted").
+  const withUndo = (label: string, mutate: () => void) => {
+    const snapshot = markdown;
+    mutate();
+    if (typeof snapshot !== "string") return;
+    clearUndoTimer();
+    setUndoState({ snapshot, label });
+    undoTimerRef.current = setTimeout(() => {
+      setUndoState(null);
+      undoTimerRef.current = null;
+    }, 5000);
+  };
+
+  const applyUndo = () => {
+    if (!undoState) return;
+    const { snapshot } = undoState;
+    if (typeof snapshot !== "string") return;
+    isApplyingUndoRef.current = true;
+    setMarkdown(snapshot);
+    clearUndoTimer();
+    setUndoState(null);
+    queueMicrotask(() => {
+      isApplyingUndoRef.current = false;
+    });
+  };
+
+  // Auth state — Save is gated; compose is always available.
+  const [user, setUser] = useState<{ id: string } | null | undefined>(undefined);
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_e, session) =>
+      setUser(session?.user ?? null),
+    );
+    return () => subscription.unsubscribe();
+  }, []);
+  const isLoaded = user !== undefined;
+  const isSignedIn = user != null;
+
+  // Hydrate an owned draft from ?id=. Skip the row we just created ourselves
+  // (replaceState sets the param but state is already current).
+  useEffect(() => {
+    if (!idParam || idParam === draftId) return;
+    let cancelled = false;
+    setLoadError(null);
+    setPublishedLock(null);
+    (async () => {
+      try {
+        const res = await fetch(`/api/staves/${idParam}`);
+        if (!res.ok) {
+          if (!cancelled) {
+            setLoadError(
+              res.status === 404 || res.status === 403 ? "not_found" : "error",
+            );
+          }
+          return;
+        }
+        const data = (await res.json()) as {
+          id: string;
+          title?: string;
+          description?: string | null;
+          tags?: string[] | null;
+          version?: number;
+          body: string;
+          license: string;
+          status: string;
+          forkAttribution?: ForkBanner | null;
+        };
+        if (cancelled) return;
+        if (data.status === "published") {
+          setPublishedLock(data.id);
+          return;
+        }
+        setDraftId(data.id);
+        setMarkdown(data.body ?? "");
+        setLicense(toLicense(data.license));
+        setTitle(data.title ?? "");
+        setDescription(data.description ?? "");
+        setTags(Array.isArray(data.tags) ? data.tags : []);
+        setVersion(typeof data.version === "number" ? data.version : 1);
+        setForkBanner(data.forkAttribution ?? null);
+        setSaveState("idle");
+      } catch {
+        if (!cancelled) setLoadError("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [idParam, draftId]);
+
   const lineCount = useMemo(() => markdown.split("\n").length, [markdown]);
 
-  const insertSnippet = (snippet: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) {
-      setMarkdown((prev) => `${prev}\n${snippet}`);
-      return;
-    }
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const nextValue = markdown.slice(0, start) + snippet + markdown.slice(end);
-    setMarkdown(nextValue);
-    queueMicrotask(() => {
-      textarea.focus();
-      const nextCursor = start + snippet.length;
-      textarea.setSelectionRange(nextCursor, nextCursor);
+  const insertSnippet = (snippet: string, label: string) => {
+    withUndo(label, () => {
+      const textarea = textareaRef.current;
+      if (!textarea) {
+        setMarkdown((prev) => `${prev}\n${snippet}`);
+        return;
+      }
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const nextValue = markdown.slice(0, start) + snippet + markdown.slice(end);
+      setMarkdown(nextValue);
+      queueMicrotask(() => {
+        textarea.focus();
+        const nextCursor = start + snippet.length;
+        textarea.setSelectionRange(nextCursor, nextCursor);
+      });
     });
   };
 
   const applyTemplate = (templateKey: keyof typeof templates) => {
-    setMarkdown(templates[templateKey]);
+    withUndo("Template applied", () => {
+      setMarkdown(templates[templateKey]);
+    });
   };
 
   const formatMarkdown = () => {
-    const formatted = markdown
-      .replace(/\r\n/g, "\n")
-      .replace(/[ \t]+$/gm, "")
-      .replace(/\n{3,}/g, "\n\n");
-    setMarkdown(formatted);
+    withUndo("Tidied", () => {
+      const formatted = markdown
+        .replace(/\r\n/g, "\n")
+        .replace(/[ \t]+$/gm, "")
+        .replace(/\n{3,}/g, "\n\n");
+      setMarkdown(formatted);
+    });
+  };
+
+  const resetMarkdown = () => {
+    withUndo("Reset to template", () => {
+      setMarkdown(initialMarkdown);
+    });
+  };
+
+  const clearMarkdown = () => {
+    withUndo("Cleared", () => {
+      setMarkdown("");
+    });
   };
 
   const copyMarkdown = async () => {
@@ -241,76 +373,412 @@ export default function LoomPage() {
     setTimeout(() => setSavedSettingsNotice(""), 1400);
   };
 
-  const handleAnalyze = () => {
-    const nextReport = analyzeStave(markdown);
-    setReport(nextReport);
-
+  const handleAnalyze = async () => {
     if (saveToGlobal) {
       saveGlobalAISettings({ provider, apiKey });
     }
-
     setOutput("");
     setRunning(true);
     setActiveResultTab("terminal");
 
-    const lines = buildTerminalLines(nextReport, traceLevel);
-    let current = 0;
-    const timer = setInterval(() => {
-      if (current < lines.length) {
-        setOutput((prev) => (prev ? `${prev}\n${lines[current]}` : lines[current]));
-        current += 1;
-      } else {
-        clearInterval(timer);
-        setRunning(false);
-      }
-    }, 85);
+    const nextReport = await getStaveAnalyzer().analyzeStave({ markdown });
+    setReport(nextReport);
+    setOutput(buildTerminalLines(nextReport, traceLevel).join("\n"));
+    setRunning(false);
   };
+
+  // Persists the current editor state and returns the draft id, or null on
+  // failure. Shared by the Save button and the Publish flow (publish saves the
+  // latest content first so what goes public matches what's on screen).
+  const persistDraft = async (): Promise<string | null> => {
+    setSaveState("saving");
+    // The fold-out title wins when set; otherwise fall back to the H1.
+    const effectiveTitle = title.trim() || deriveTitle(markdown);
+    const trimmedDescription = description.trim();
+    const fields = {
+      title: effectiveTitle,
+      body: markdown,
+      license,
+      description: trimmedDescription || null,
+      tags,
+    };
+
+    try {
+      if (!draftId) {
+        const res = await fetch("/api/staves", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...fields, status: "draft" }),
+        });
+        if (!res.ok) {
+          setSaveState("error");
+          return null;
+        }
+        const { id } = (await res.json()) as { id: string };
+        setDraftId(id);
+        window.history.replaceState(null, "", `/loom?id=${id}`);
+        setLastSavedAt(new Date());
+        setSaveState("saved");
+        return id;
+      }
+      const res = await fetch(`/api/staves/${draftId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(fields),
+      });
+      if (!res.ok) {
+        if (res.status === 409) setPublishedLock(draftId);
+        setSaveState("error");
+        return null;
+      }
+      setLastSavedAt(new Date());
+      setSaveState("saved");
+      return draftId;
+    } catch {
+      setSaveState("error");
+      return null;
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!isSignedIn) return;
+    await persistDraft();
+  };
+
+  const MAX_TAGS = 10;
+  const toggleTag = (tag: string) => {
+    setTags((prev) =>
+      prev.includes(tag)
+        ? prev.filter((t) => t !== tag)
+        : prev.length >= MAX_TAGS
+          ? prev
+          : [...prev, tag],
+    );
+  };
+
+  // Opening the fold-out seeds the title field from the H1 so it's editable
+  // rather than blank, and clears any stale publish error.
+  const openPublish = () => {
+    setPublishError(null);
+    if (!title.trim()) setTitle(deriveTitle(markdown));
+    setShowPublish(true);
+  };
+
+  const confirmPublish = async () => {
+    if (!isSignedIn) return;
+    setPublishing(true);
+    setPublishError(null);
+
+    const id = await persistDraft();
+    if (!id) {
+      setPublishing(false);
+      setPublishError("Could not save your draft before publishing. Try again.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/staves/${id}/publish`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          releaseNotes: releaseNotes.trim() || undefined,
+          private: isPrivate,
+        }),
+      });
+      if (!res.ok) {
+        setPublishError(
+          res.status === 400
+            ? "Add a title (a top-level # heading) and some body text before publishing."
+            : "Could not publish this stave. Try again.",
+        );
+        setPublishing(false);
+        return;
+      }
+      const { slug } = (await res.json()) as { slug: string };
+      router.push(`/staves/${slug}`);
+    } catch {
+      setPublishError("Could not publish this stave. Try again.");
+      setPublishing(false);
+    }
+  };
+
+  const startNewVersion = async () => {
+    if (!publishedLock) return;
+    try {
+      const res = await fetch(`/api/staves/${publishedLock}/new-version`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        setLoadError("error");
+        return;
+      }
+      const { id } = (await res.json()) as { id: string };
+      router.push(`/loom?id=${id}`);
+    } catch {
+      setLoadError("error");
+    }
+  };
+
+  const saveStatusText =
+    saveState === "saving"
+      ? "Saving…"
+      : saveState === "error"
+        ? "Save failed"
+        : saveState === "saved" && lastSavedAt
+          ? `Saved · ${lastSavedAt.toLocaleTimeString()}`
+          : draftId
+            ? "Draft"
+            : "Unsaved";
 
   return (
     <>
-      <div className="container">
-        <div className="loom-header">
-          <div>
-            <p className="page-hero-tag" style={{ marginBottom: 6 }}>
-              Build a stave
-            </p>
-            <h1>The Loom</h1>
-          </div>
-          <div className="loom-controls">
-            <label className="loom-trace">
-              Trace
-              <select
-                className="select"
-                value={traceLevel}
-                onChange={(e) => setTraceLevel(e.target.value)}
-                aria-label="Trace level"
+      <div className="loom-header">
+        <div>
+          <p className="page-hero-tag" style={{ marginBottom: 6 }}>
+            Build a stave
+          </p>
+          <h1>The Loom</h1>
+        </div>
+        <div className="loom-controls">
+          <Link href="/upload" className="btn btn-ghost btn-sm">
+            <Upload size={14} />
+            Import .zip
+          </Link>
+          <label className="loom-trace">
+            Trace
+            <select
+              className="select"
+              value={traceLevel}
+              onChange={(e) => setTraceLevel(e.target.value)}
+              aria-label="Trace level"
+            >
+              <option value="standard">Standard</option>
+              <option value="verbose">Verbose</option>
+              <option value="strict">Strict</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setOutput("")}
+            disabled={running && output.length === 0}
+          >
+            <Trash2 size={13} />
+            Clear output
+          </button>
+          <button
+            type="button"
+            className="btn btn-soft btn-sm"
+            onClick={handleAnalyze}
+            disabled={running}
+          >
+            <PlayCircle size={14} />
+            {running ? "Analyzing..." : "Analyze stave"}
+          </button>
+          {isLoaded && isSignedIn && !publishedLock ? (
+            <div className="loom-save-cluster">
+              <button
+                type="button"
+                className="btn btn-soft btn-sm"
+                onClick={handleSaveDraft}
+                disabled={saveState === "saving" || publishing}
               >
-                <option value="standard">Standard</option>
-                <option value="verbose">Verbose</option>
-                <option value="strict">Strict</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => setOutput("")}
-              disabled={running && output.length === 0}
-            >
-              <Trash2 size={13} />
-              Clear output
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={handleAnalyze}
-              disabled={running}
-            >
-              <PlayCircle size={14} />
-              {running ? "Analyzing..." : "Analyze stave"}
-            </button>
-          </div>
+                <Save size={14} />
+                Save draft
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={openPublish}
+                disabled={publishing || saveState === "saving" || !markdown.trim()}
+              >
+                <Send size={14} />
+                Publish
+              </button>
+              <span
+                className={`loom-save-status ${saveState === "error" ? "is-error" : ""}`}
+              >
+                {saveStatusText}
+              </span>
+            </div>
+          ) : isLoaded && !isSignedIn ? (
+            <GaldrSignInButton>
+              <span className="btn btn-primary btn-sm">
+                <Save size={14} />
+                Sign in to save
+              </span>
+            </GaldrSignInButton>
+          ) : null}
         </div>
       </div>
+
+      {forkBanner || publishedLock || loadError ? (
+        <div className="loom-notices">
+          {forkBanner ? (
+            <p className="loom-notice">
+              <GitFork size={13} aria-hidden /> This is a fork of{" "}
+              {forkBanner.slug ? (
+                <Link href={`/staves/${forkBanner.slug}`}>{forkBanner.title}</Link>
+              ) : (
+                <span>{forkBanner.title}</span>
+              )}
+              {forkBanner.authorUsername ? ` by ${forkBanner.authorUsername}` : ""}.
+              You can rename it and change the license before publishing.
+            </p>
+          ) : null}
+
+          {publishedLock ? (
+            <div className="loom-notice is-warning">
+              <span>
+                This stave is published and can&apos;t be edited. Create a new version to
+                make changes.
+              </span>
+              <button
+                type="button"
+                className="btn btn-soft btn-sm"
+                onClick={startNewVersion}
+              >
+                Create new version
+              </button>
+            </div>
+          ) : null}
+
+          {loadError === "not_found" ? (
+            <p className="loom-notice is-error">
+              That draft could not be loaded (it may not exist or isn&apos;t yours).
+              Starting a fresh draft is fine.
+            </p>
+          ) : loadError === "error" ? (
+            <p className="loom-notice is-error">
+              Something went wrong loading that stave. Try again.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showPublish ? (
+        <div className="loom-notices">
+          <div className="loom-publish-panel" role="dialog" aria-label="Publish stave">
+            <div className="loom-publish-grid">
+              <label className="loom-publish-field">
+                <span className="label-tiny">Title</span>
+                <input
+                  className="input"
+                  value={title}
+                  maxLength={200}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Name your stave"
+                />
+              </label>
+              <label className="loom-publish-field">
+                <span className="label-tiny">Version</span>
+                <input
+                  className="input"
+                  value={`v${version}`}
+                  readOnly
+                  aria-readonly
+                  title="Versions increment automatically when you publish edits."
+                />
+              </label>
+            </div>
+
+            <label className="loom-publish-field">
+              <span className="label-tiny">Description (optional, ≤ 2000 chars)</span>
+              <textarea
+                className="textarea"
+                rows={2}
+                maxLength={2000}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What does this stave do?"
+              />
+            </label>
+
+            <div className="loom-publish-field">
+              <span className="label-tiny">
+                <Tag size={11} aria-hidden /> Tags ({tags.length}/{MAX_TAGS})
+              </span>
+              <div className="loom-tag-picker" role="group" aria-label="Tags">
+                {BASELINE_TAGS.map((tag) => {
+                  const selected = tags.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      className={`loom-tag-chip ${selected ? "is-selected" : ""}`}
+                      aria-pressed={selected}
+                      onClick={() => toggleTag(tag)}
+                      disabled={!selected && tags.length >= MAX_TAGS}
+                    >
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <label className="loom-publish-field">
+              <span className="label-tiny">Release notes (optional, ≤ 500 chars)</span>
+              <textarea
+                className="textarea"
+                rows={2}
+                maxLength={500}
+                value={releaseNotes}
+                onChange={(e) => setReleaseNotes(e.target.value)}
+                placeholder="What's in this release?"
+              />
+            </label>
+
+            <label className="loom-publish-private">
+              <input
+                type="checkbox"
+                checked={isPrivate}
+                onChange={(e) => setIsPrivate(e.target.checked)}
+              />
+              <Lock size={13} aria-hidden />
+              <span>
+                <strong>Private (unlisted)</strong> — published but hidden from the
+                registry, saga, and search. Only you can open its page.
+              </span>
+            </label>
+
+            <p className="muted" style={{ fontSize: 12 }}>
+              {isPrivate
+                ? "Publishing locks this stave's URL. Only you will be able to view it."
+                : "Publishing locks this stave's public URL and lists it in the registry."}{" "}
+              Edits afterward create a new version.
+            </p>
+            {publishError ? (
+              <p className="loom-save-status is-error" role="alert">
+                {publishError}
+              </p>
+            ) : null}
+            <div className="empty-state-actions">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowPublish(false)}
+                disabled={publishing}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={confirmPublish}
+                disabled={publishing}
+              >
+                <Send size={14} />
+                {publishing
+                  ? "Publishing…"
+                  : isPrivate
+                    ? "Publish privately"
+                    : "Publish stave"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="loom-pane">
         <div className="loom-col">
@@ -320,21 +788,23 @@ export default function LoomPage() {
               <button
                 type="button"
                 className="loom-tool-btn"
-                onClick={() => insertSnippet("\n## Section\n")}
+                onClick={() => insertSnippet("\n## Section\n", "Heading inserted")}
               >
                 <Heading2 size={13} /> Heading
               </button>
               <button
                 type="button"
                 className="loom-tool-btn"
-                onClick={() => insertSnippet("\n- item one\n- item two\n")}
+                onClick={() =>
+                  insertSnippet("\n- item one\n- item two\n", "List inserted")
+                }
               >
                 <List size={13} /> List
               </button>
               <button
                 type="button"
                 className="loom-tool-btn"
-                onClick={() => insertSnippet("\n```md\n# Notes\n```\n")}
+                onClick={() => insertSnippet("\n```md\n# Notes\n```\n", "Code inserted")}
               >
                 <Code2 size={13} /> Code
               </button>
@@ -342,12 +812,32 @@ export default function LoomPage() {
                 type="button"
                 className="loom-tool-btn"
                 onClick={() =>
-                  insertSnippet("\n| Field | Value |\n| --- | --- |\n| Risk | High |\n")
+                  insertSnippet(
+                    "\n| Field | Value |\n| --- | --- |\n| Risk | High |\n",
+                    "Table inserted",
+                  )
                 }
               >
                 <Table size={13} /> Table
               </button>
             </div>
+
+            {undoState ? (
+              <div
+                className="loom-tool-group loom-undo-group"
+                role="status"
+                aria-live="polite"
+              >
+                <button
+                  type="button"
+                  className="loom-tool-btn loom-undo-btn"
+                  onClick={applyUndo}
+                  title={`Undo: ${undoState.label}`}
+                >
+                  <Undo2 size={13} /> Undo {undoState.label.toLowerCase()}
+                </button>
+              </div>
+            ) : null}
 
             <div className="loom-tool-group">
               <label className="loom-template">
@@ -375,20 +865,35 @@ export default function LoomPage() {
               <button type="button" className="loom-tool-btn" onClick={formatMarkdown}>
                 <Wand2 size={13} /> Tidy
               </button>
+              <label className="loom-template" title="License for this stave">
+                <Scale size={13} />
+                <select
+                  className="select"
+                  value={license}
+                  onChange={(e) => setLicense(e.target.value as License)}
+                  aria-label="License"
+                >
+                  {LICENSES.map((option) => (
+                    <option key={option.value} value={option.value} title={option.tooltip}>
+                      {option.value}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button type="button" className="loom-tool-btn" onClick={copyMarkdown}>
                 <Copy size={13} /> {copied ? "Copied" : "Copy"}
               </button>
               <button
                 type="button"
                 className="loom-tool-btn"
-                onClick={() => setMarkdown(initialMarkdown)}
+                onClick={resetMarkdown}
               >
                 <RotateCcw size={13} /> Reset
               </button>
               <button
                 type="button"
                 className="loom-tool-btn is-danger"
-                onClick={() => setMarkdown("")}
+                onClick={clearMarkdown}
               >
                 <Eraser size={13} /> Clear
               </button>
@@ -398,7 +903,14 @@ export default function LoomPage() {
             ref={textareaRef}
             className="loom-editor"
             value={markdown}
-            onChange={(e) => setMarkdown(e.target.value)}
+            onChange={(e) => {
+              // Fresh keystrokes invalidate any pending undo snapshot so we
+              // never silently overwrite the user's new typing on restore.
+              if (!isApplyingUndoRef.current && undoState) {
+                dismissUndo();
+              }
+              setMarkdown(e.target.value);
+            }}
             aria-label="Markdown editor"
             spellCheck={false}
           />
@@ -568,5 +1080,19 @@ export default function LoomPage() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function LoomPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container">
+          <h1>The Loom</h1>
+        </div>
+      }
+    >
+      <LoomEditor />
+    </Suspense>
   );
 }

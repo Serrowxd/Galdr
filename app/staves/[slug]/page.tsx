@@ -30,6 +30,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!db) return { title: "Stave | Galdr" };
   const stave = await getStaveBySlug(db, slug);
   if (!stave) return { title: "Stave | Galdr" };
+
+  // Don't leak a draft/private stave's title or description to non-owners.
+  if (stave.status === "draft" || stave.private) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user?.id !== stave.authorId) return { title: "Stave | Galdr" };
+  }
+
   return {
     title: `${stave.title} | Galdr`,
     description: stave.description ?? undefined,
@@ -51,8 +61,9 @@ export default async function StaveDetailPage({ params }: PageProps) {
   } = await supabase.auth.getUser();
   const isAuthor = user?.id === stave.authorId;
 
-  // Drafts are owner-only — hide their existence from everyone else.
-  if (stave.status === "draft" && !isAuthor) notFound();
+  // Drafts and private (unlisted) staves are owner-only — hide their
+  // existence from everyone else.
+  if ((stave.status === "draft" || stave.private) && !isAuthor) notFound();
 
   const status = stave.status === "published" ? "published" : "draft";
 

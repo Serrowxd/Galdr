@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 
 import { getDbOptional } from "@/db";
 import { enforceRateLimit } from "@/lib/rateLimitGuard";
-import { getStaveById, softDeleteStave, updateStave } from "@/lib/staves";
+import {
+  getStaveAttribution,
+  getStaveById,
+  softDeleteStave,
+  updateStave,
+} from "@/lib/staves";
 import { validateStaveFields } from "@/lib/staveValidation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,8 +29,9 @@ export async function GET(_request: Request, context: Ctx) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Drafts are owner-only — hide their existence from everyone else.
-  if (stave.status === "draft") {
+  // Drafts and private (unlisted) staves are owner-only — hide their
+  // existence from everyone else.
+  if (stave.status === "draft" || stave.private) {
     const supabase = await createClient();
     const {
       data: { user },
@@ -35,7 +41,12 @@ export async function GET(_request: Request, context: Ctx) {
     }
   }
 
-  return NextResponse.json(stave);
+  // Resolve fork attribution so the Loom can show the parent banner on a draft.
+  const forkAttribution = stave.forkedFrom
+    ? await getStaveAttribution(db, stave.forkedFrom)
+    : null;
+
+  return NextResponse.json({ ...stave, forkAttribution });
 }
 
 export async function PATCH(request: Request, context: Ctx) {

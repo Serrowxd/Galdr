@@ -1140,9 +1140,13 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 0;
+  padding: 16px var(--content-gutter);
   border-bottom: 0.5px solid var(--hairline);
   flex-wrap: wrap;
+}
+
+.loom-notices {
+  padding: 0 var(--content-gutter);
 }
 
 .loom-header h1 {
@@ -1172,6 +1176,141 @@ textarea {
   font-size: 12px;
   width: auto;
   min-width: 110px;
+}
+
+.loom-save-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loom-save-status {
+  font-size: 11.5px;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.loom-save-status.is-error {
+  color: var(--danger, #e5484d);
+}
+
+.loom-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  background: var(--surface-sunken);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+.loom-notice.is-warning {
+  justify-content: space-between;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--hairline));
+}
+
+.loom-notice.is-error {
+  color: var(--danger, #e5484d);
+  border-color: color-mix(in srgb, var(--danger, #e5484d) 40%, var(--hairline));
+}
+
+.loom-publish-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 16px;
+  background: var(--surface-sunken);
+  border: 0.5px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+}
+
+.loom-publish-grid {
+  display: grid;
+  grid-template-columns: 1fr 96px;
+  gap: 10px;
+}
+
+@media (max-width: 560px) {
+  .loom-publish-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.loom-publish-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.loom-publish-field .input[readonly] {
+  color: var(--text-soft);
+  cursor: default;
+}
+
+.loom-tag-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.loom-tag-chip {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-soft);
+  background: transparent;
+  border: 0.5px solid var(--hairline);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.loom-tag-chip:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--text);
+}
+
+.loom-tag-chip.is-selected {
+  color: var(--accent-bright);
+  background: var(--accent-tint-12);
+  border-color: var(--accent-border);
+}
+
+.loom-tag-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.loom-publish-private {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.loom-publish-private input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.loom-publish-private svg {
+  margin-top: 1px;
+  flex-shrink: 0;
+  color: var(--text-soft);
+}
+
+.loom-publish-private strong {
+  color: var(--text);
 }
 
 .loom-pane {
@@ -1262,6 +1401,43 @@ textarea {
 .loom-tool-btn.is-danger:hover {
   color: #ffb4a8;
   border-color: rgba(255, 113, 113, 0.4);
+}
+
+.loom-undo-group {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* When the undo group is present it already absorbs the auto-margin, so the
+ * trailing actions group should sit right next to it instead of being pushed
+ * further right by the default `.loom-tool-group + .loom-tool-group` rule. */
+.loom-undo-group + .loom-tool-group {
+  margin-left: 0;
+}
+
+.loom-tool-btn.loom-undo-btn {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-tint-12);
+  animation: loom-undo-pop 160ms ease-out;
+}
+
+.loom-tool-btn.loom-undo-btn:hover {
+  color: var(--accent-bright);
+  border-color: var(--accent-border-strong);
+  background: var(--accent-tint-20);
+}
+
+@keyframes loom-undo-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .loom-template {
@@ -2397,4 +2573,91 @@ textarea {
   .page-hero-title {
     font-size: 24px;
   }
+}
+
+/* Zip upload (spec 05) */
+.upload-gate {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 20px;
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+
+.upload-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-secondary);
+  border: 1px dashed color-mix(in srgb, var(--accent) 35%, var(--hairline));
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface-sunken);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.upload-drop:hover,
+.upload-drop:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.upload-drop.is-dragging {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-sunken));
+}
+
+.upload-drop.is-busy {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.upload-drop-title {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.upload-drop-hint {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.upload-drop-hint code {
+  font-size: 11.5px;
+}
+
+.upload-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--danger, #e5484d);
+  border: 0.5px solid color-mix(in srgb, var(--danger, #e5484d) 40%, var(--hairline));
+  border-radius: var(--radius-sm);
+}
+
+/* Library shelves */
+.library-shelves {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 20px 0 32px;
+}
+
+.library-shelf .stave-grid {
+  padding-top: 16px;
+}
+
+.library-shelf-empty {
+  padding: 16px 0 4px;
+  font-size: 13px;
 }
