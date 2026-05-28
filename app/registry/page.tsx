@@ -1,62 +1,67 @@
-"use client";
+import Link from "next/link";
 
-import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { RegistryControls } from "@/app/registry/RegistryControls";
 import { StaveCard } from "@/components/StaveCard";
-import { staves } from "@/lib/mockData";
+import { getDbOptional } from "@/db";
+import { getTopScribes, getTrendingTags, listStaves } from "@/lib/staves";
 
-const allTags = Array.from(new Set(staves.flatMap((stave) => stave.tags))).sort();
+export const dynamic = "force-dynamic";
 
-export default function RegistryPage() {
-  const [query, setQuery] = useState("");
-  const [selectedTag, setSelectedTag] = useState("all");
+const LIMIT = 24;
 
-  const filteredStaves = useMemo(() => {
-    const lowered = query.trim().toLowerCase();
-    return staves.filter((stave) => {
-      const textMatch =
-        lowered.length === 0 ||
-        stave.title.toLowerCase().includes(lowered) ||
-        stave.scribe.toLowerCase().includes(lowered) ||
-        stave.tags.some((tag) => tag.toLowerCase().includes(lowered));
-      const tagMatch = selectedTag === "all" || stave.tags.includes(selectedTag);
-      return textMatch && tagMatch;
-    });
-  }, [query, selectedTag]);
+type SearchParams = Promise<{
+  q?: string;
+  tag?: string;
+  sort?: string;
+  page?: string;
+}>;
 
-  const registryFeed = useMemo(
-    () =>
-      [...filteredStaves].sort((a, b) => {
-        const aScore = a.popularityScore * 10 + a.upvotes - a.downvotes + a.commentsCount;
-        const bScore = b.popularityScore * 10 + b.upvotes - b.downvotes + b.commentsCount;
-        if (bScore !== aScore) return bScore - aScore;
-        return Date.parse(b.publishedAt) - Date.parse(a.publishedAt);
-      }),
-    [filteredStaves],
-  );
+export default async function RegistryPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const sp = await searchParams;
+  const db = getDbOptional();
 
-  const topScribes = useMemo(() => {
-    const map = new Map<string, { name: string; staves: number; score: number }>();
-    filteredStaves.forEach((stave) => {
-      const existing = map.get(stave.scribe) ?? {
-        name: stave.scribe,
-        staves: 0,
-        score: 0,
-      };
-      existing.staves += 1;
-      existing.score += stave.popularityScore + Math.floor(stave.upvotes / 20);
-      map.set(stave.scribe, existing);
-    });
-    return [...map.values()].sort((a, b) => b.score - a.score).slice(0, 6);
-  }, [filteredStaves]);
+  if (!db) {
+    return (
+      <div className="container" style={{ padding: "48px 0" }}>
+        <p className="muted">The registry is unavailable right now.</p>
+      </div>
+    );
+  }
 
-  const trendingTags = useMemo(() => {
-    const map = new Map<string, number>();
-    filteredStaves.forEach((stave) => {
-      stave.tags.forEach((tag) => map.set(tag, (map.get(tag) ?? 0) + 1));
-    });
-    return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
-  }, [filteredStaves]);
+  const q = sp.q?.trim() || undefined;
+  const tag = sp.tag && sp.tag !== "all" ? sp.tag : undefined;
+  const sort = sp.sort === "new" ? "new" : "top";
+  const page = Math.max(1, Number(sp.page ?? "1") || 1);
+
+  const [{ rows, total }, trendingTags, topScribes] = await Promise.all([
+    listStaves(db, {
+      status: "published",
+      q,
+      tag,
+      sort,
+      limit: LIMIT,
+      offset: (page - 1) * LIMIT,
+    }),
+    getTrendingTags(db),
+    getTopScribes(db),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+  const allTags = trendingTags.map((t) => t.tag);
+
+  const pageHref = (n: number) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (tag) params.set("tag", tag);
+    if (sort !== "top") params.set("sort", sort);
+    if (n > 1) params.set("page", String(n));
+    const qs = params.toString();
+    return qs ? `/registry?${qs}` : "/registry";
+  };
 
   return (
     <>
@@ -68,57 +73,74 @@ export default function RegistryPage() {
           </h1>
           <p className="page-hero-sub">
             Filter by tag, search by intent, and rank by what the community is
-            running today.
+            running this month.
           </p>
         </div>
       </section>
 
       <div className="container">
-        <div className="toolbar-row">
-          <div className="search-bar" role="search">
-            <Search size={16} aria-hidden />
-            <input
-              type="search"
-              placeholder="Search staves, scribes, tags..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search staves"
-            />
-          </div>
-
-          <select
-            className="select"
-            style={{ maxWidth: 200 }}
-            value={selectedTag}
-            onChange={(e) => setSelectedTag(e.target.value)}
-            aria-label="Filter by tag"
-          >
-            <option value="all">All tags</option>
-            {allTags.map((tag) => (
-              <option key={tag} value={tag}>
-                {tag}
-              </option>
-            ))}
-          </select>
-        </div>
+        <RegistryControls allTags={allTags} />
 
         <div className="section-head">
           <h2>Featured feed</h2>
-          <span className="muted">{filteredStaves.length} staves</span>
+          <span className="muted">{total} staves</span>
         </div>
 
         <div className="col-grid" style={{ paddingTop: 16 }}>
           <div>
-            {registryFeed.length === 0 ? (
+            {rows.length === 0 ? (
               <div style={{ padding: "48px 0", textAlign: "center" }}>
-                <p className="muted">No staves match this search.</p>
+                <p className="muted">
+                  {total === 0 && !q && !tag
+                    ? "Nothing here yet."
+                    : "No staves match this search."}
+                </p>
+                <p className="muted">
+                  {total === 0 && !q && !tag ? (
+                    <Link href="/loom">Open the Loom →</Link>
+                  ) : (
+                    <Link href="/registry">Clear filters</Link>
+                  )}
+                </p>
               </div>
             ) : (
-              <div className="stave-grid">
-                {registryFeed.map((stave) => (
-                  <StaveCard key={`feed-${stave.id}`} stave={stave} />
-                ))}
-              </div>
+              <>
+                <div className="stave-grid">
+                  {rows.map((stave) => (
+                    <StaveCard key={stave.id} stave={stave} />
+                  ))}
+                </div>
+
+                {totalPages > 1 ? (
+                  <div
+                    className="filters"
+                    style={{ marginTop: 24, justifyContent: "center" }}
+                    aria-label="Pagination"
+                  >
+                    {page > 1 ? (
+                      <Link href={pageHref(page - 1)} className="chip">
+                        ← Prev
+                      </Link>
+                    ) : (
+                      <span className="chip" aria-disabled>
+                        ← Prev
+                      </span>
+                    )}
+                    <span className="filters-label">
+                      Page {page} of {totalPages}
+                    </span>
+                    {page < totalPages ? (
+                      <Link href={pageHref(page + 1)} className="chip">
+                        Next →
+                      </Link>
+                    ) : (
+                      <span className="chip" aria-disabled>
+                        Next →
+                      </span>
+                    )}
+                  </div>
+                ) : null}
+              </>
             )}
           </div>
 
@@ -126,16 +148,10 @@ export default function RegistryPage() {
             <section className="side-card">
               <h3 className="side-card-title">Trending tags</h3>
               <div className="side-card-tags">
-                {trendingTags.map(([tag, count]) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    className="tag"
-                    style={{ cursor: "pointer" }}
-                    onClick={() => setSelectedTag(tag)}
-                  >
-                    {tag} <span className="chip-count">{count}</span>
-                  </button>
+                {trendingTags.map(({ tag: t, count }) => (
+                  <Link key={t} href={`/registry?tag=${t}`} className="tag">
+                    {t} <span className="chip-count">{count}</span>
+                  </Link>
                 ))}
               </div>
             </section>
@@ -144,9 +160,11 @@ export default function RegistryPage() {
               <h3 className="side-card-title">Top scribes</h3>
               <ul className="side-card-list">
                 {topScribes.map((scribe) => (
-                  <li key={scribe.name}>
-                    <span>{scribe.name}</span>
-                    <small>{scribe.staves} staves</small>
+                  <li key={scribe.userId}>
+                    <Link href={`/saga/${scribe.username.toLowerCase()}`}>
+                      {scribe.username}
+                    </Link>
+                    <small>{scribe.staveCount} staves</small>
                   </li>
                 ))}
               </ul>

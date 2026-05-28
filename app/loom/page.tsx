@@ -26,7 +26,16 @@ import {
   saveGlobalAISettings,
 } from "@/lib/globalSettings";
 import { renderMarkdownPreview } from "@/lib/markdownPreview";
-import { loomOutputMock } from "@/lib/mockData";
+
+// Demo terminal output appended to the local analyzer's report until a real
+// runtime lands (spec 02). Loom-only fixture, intentionally inline.
+const loomOutputMock = `> Initializing Stave: Code Reviewer v1.2.3
+> Loading bindings: [eslint-core, ast-parser, vuln-db]
+> Binding check: 3/3 resolved ok
+
+[00:00:01] Parsing input repository...
+[00:00:02] Scanning 14 files across 3 directories
+[00:00:03] AST analysis complete`;
 
 const initialMarkdown = `# Stave: Code Reviewer
 

@@ -5,7 +5,7 @@ import { getDbOptional } from "@/db";
 import { staveVotes } from "@/db/schema";
 import { getVoteTotals, getUserVote } from "@/lib/staveEngagement";
 import { createClient } from "@/lib/supabase/server";
-import { isValidStaveId } from "@/lib/staves";
+import { publishedStaveExists } from "@/lib/staves";
 import { rateLimit } from "@/lib/rateLimit";
 
 const RATE_LIMIT = 30;
@@ -30,13 +30,14 @@ export async function POST(
   }
 
   const { id } = await context.params;
-  if (!isValidStaveId(id)) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
 
   const db = getDbOptional();
   if (!db) {
     return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
+  }
+
+  if (!(await publishedStaveExists(db, id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   let payload: unknown;

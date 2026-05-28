@@ -2,10 +2,9 @@ import Link from "next/link";
 
 import { StaveCard } from "@/components/StaveCard";
 import { getDbOptional } from "@/db";
-import type { Stave } from "@/lib/mockData";
 import { listSavedStaveIds } from "@/lib/staveEngagement";
 import { createClient } from "@/lib/supabase/server";
-import { getStaveById } from "@/lib/staves";
+import { getStavesByIds, type Stave } from "@/lib/staves";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +18,7 @@ export default async function LibraryPage() {
   let savedStaves: Stave[] = [];
   if (user && db) {
     const ids = await listSavedStaveIds(db, user.id);
-    savedStaves = ids
-      .map((id) => getStaveById(id))
-      .filter((s): s is Stave => Boolean(s));
+    savedStaves = await getStavesByIds(db, ids);
   }
 
   return (
@@ -83,7 +80,7 @@ export default async function LibraryPage() {
 
         {user ? (
           <p className="muted" style={{ padding: "0 0 24px" }}>
-            <Link href="/grimoire">Your grimoire →</Link>
+            <Link href="/saga">Your saga →</Link>
           </p>
         ) : null}
       </div>

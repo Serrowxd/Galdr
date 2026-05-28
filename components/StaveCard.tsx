@@ -1,51 +1,50 @@
 import Link from "next/link";
-import { Zap } from "lucide-react";
-import type { Stave } from "@/lib/mockData";
 
-type StaveCardProps = {
-  stave: Stave;
+export type StaveCardData = {
+  slug: string;
+  title: string;
+  description: string | null;
+  tags: string[];
+  version: number;
+  upvotes?: number;
+  downvotes?: number;
+  hasNewerVersion?: boolean;
+  latestSlug?: string | null;
 };
 
-function formatInvocations(value: number): string {
-  if (value >= 1000) {
-    const k = value / 1000;
-    const rounded = k >= 10 ? Math.round(k) : Math.round(k * 10) / 10;
-    return `${rounded}k invocations`;
-  }
-  return `${value} invocations`;
-}
-
-export function StaveCard({ stave }: StaveCardProps) {
-  const score = stave.upvotes - stave.downvotes;
+export function StaveCard({ stave }: { stave: StaveCardData }) {
+  const score = (stave.upvotes ?? 0) - (stave.downvotes ?? 0);
   return (
-    <Link href={`/staves/${stave.id}`} className="stave-card">
+    <Link href={`/staves/${stave.slug}`} className="stave-card">
       <div className="stave-card-top">
-        <div className="stave-card-title">{stave.title}</div>
+        <div className="stave-card-title">
+          {stave.title}
+          {stave.version > 1 ? (
+            <span className="tag" style={{ marginLeft: 6 }}>
+              v{stave.version}
+            </span>
+          ) : null}
+        </div>
         <div className="stave-card-score">↑ {score.toLocaleString()}</div>
       </div>
 
-      <div className="stave-card-scribe">by {stave.scribe}</div>
-
-      <div className="stave-card-desc">{stave.description}</div>
+      {stave.description ? (
+        <div className="stave-card-desc">{stave.description}</div>
+      ) : null}
 
       <div className="stave-card-tags">
         {stave.tags.slice(0, 4).map((tag) => (
-          <span key={`${stave.id}-${tag}`} className="tag">
+          <span key={`${stave.slug}-${tag}`} className="tag">
             {tag}
           </span>
         ))}
       </div>
 
-      <div className="stave-card-meta">
-        <span className="meta-item">
-          <Zap size={12} aria-hidden />
-          {formatInvocations(stave.invocations)}
-        </span>
-        <span className="meta-item">
-          <span className="success-dot" aria-hidden />
-          {stave.successRate}% reliable
-        </span>
-      </div>
+      {stave.hasNewerVersion && stave.latestSlug ? (
+        <div className="stave-card-meta">
+          <span className="meta-item">Newer version available →</span>
+        </div>
+      ) : null}
     </Link>
   );
 }

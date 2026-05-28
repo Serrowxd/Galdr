@@ -20,8 +20,8 @@ import type { User } from "@supabase/supabase-js";
 
 const navLinks = [
   { href: "/library", label: "Library" },
-  { href: "/grimoire", label: "Scribes" },
   { href: "/loom", label: "Loom" },
+  { href: "/saga", label: "Saga" },
 ];
 
 function PrimaryNavLinks({
@@ -35,8 +35,8 @@ function PrimaryNavLinks({
     <>
       {navLinks.map((item) => {
         const isActive =
-          item.href === "/grimoire"
-            ? pathname.startsWith("/grimoire")
+          item.href === "/saga"
+            ? pathname.startsWith("/saga")
             : pathname.startsWith(item.href);
         return (
           <Link

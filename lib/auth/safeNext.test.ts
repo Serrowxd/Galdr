@@ -4,7 +4,7 @@ import { safeNext } from "@/lib/auth/safeNext";
 describe("safeNext", () => {
   it("passes through a simple rooted path", () => {
     expect(safeNext("/library")).toBe("/library");
-    expect(safeNext("/grimoire/abc")).toBe("/grimoire/abc");
+    expect(safeNext("/saga/abc")).toBe("/saga/abc");
   });
 
   it("preserves query strings on a rooted path", () => {

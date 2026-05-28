@@ -4,7 +4,7 @@ import { getDbOptional } from "@/db";
 import { comments, userProfiles } from "@/db/schema";
 import { getCommentCount, listCommentsForStave } from "@/lib/staveEngagement";
 import { createClient } from "@/lib/supabase/server";
-import { isValidStaveId } from "@/lib/staves";
+import { publishedStaveExists } from "@/lib/staves";
 import { rateLimit } from "@/lib/rateLimit";
 import { eq } from "drizzle-orm";
 
@@ -24,13 +24,14 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  if (!isValidStaveId(id)) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
 
   const db = getDbOptional();
   if (!db) {
     return NextResponse.json({ comments: [] });
+  }
+
+  if (!(await publishedStaveExists(db, id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const rows = await listCommentsForStave(db, id);
@@ -55,13 +56,14 @@ export async function POST(
   }
 
   const { id } = await context.params;
-  if (!isValidStaveId(id)) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
 
   const db = getDbOptional();
   if (!db) {
     return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
+  }
+
+  if (!(await publishedStaveExists(db, id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   let payload: unknown;

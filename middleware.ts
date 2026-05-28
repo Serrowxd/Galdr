@@ -11,9 +11,12 @@ import { applySecurityHeaders } from "@/lib/security/headers";
 // to the HTML /sign-in page that preserves the request method — the browser
 // then re-POSTs to a page route with no POST handler and gets a confusing 404
 // (this is exactly what broke save/vote). Let the handlers return clean 401s.
+// Saga (public profile) is intentionally NOT protected: /saga/<username> is a public
+// profile, and the /saga index self-redirects anon users to "/". Blocking it here
+// would bounce anon visitors (who arrive via registry "top scribes" links) to
+// /sign-in instead of the public profile.
 const PROTECTED_ROUTES = [
   /^\/library(\/.*)?$/,
-  /^\/grimoire(\/.*)?$/,
   /^\/settings(\/.*)?$/,
 ];
 

@@ -1,69 +1,31 @@
-"use client";
-
-import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Search } from "lucide-react";
+
 import { StaveCard } from "@/components/StaveCard";
 import { VegvisirLogo } from "@/components/VegvisirLogo";
-import { staves } from "@/lib/mockData";
+import { getDbOptional } from "@/db";
+import { getTopScribes, getTrendingTags, listStaves } from "@/lib/staves";
 
-const FILTER_CATEGORIES = [
-  { id: "all", label: "All" },
-  { id: "code", label: "Code", tags: ["review", "security", "lint", "testing", "automation"] },
-  { id: "docs", label: "Writing", tags: ["docs", "api", "markdown", "changelog"] },
-  { id: "agents", label: "Agents", tags: ["meta", "prompt", "optimization"] },
-  { id: "data", label: "Data", tags: ["database", "schema", "sql"] },
-  { id: "devops", label: "DevOps", tags: ["devops", "deploy", "validation", "ci", "git"] },
-  { id: "translation", label: "Translation", tags: ["translation", "polyglot"] },
-] as const;
+export const dynamic = "force-dynamic";
 
-export default function LandingPage() {
-  const [query, setQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState<string>("all");
+export default async function LandingPage() {
+  const db = getDbOptional();
 
-  const totalInvocations = useMemo(
-    () => staves.reduce((sum, s) => sum + s.invocations, 0),
-    [],
-  );
-  const totalScribes = useMemo(
-    () => new Set(staves.map((s) => s.scribe)).size,
-    [],
-  );
-  const avgSuccess = useMemo(
-    () => Math.round(staves.reduce((sum, s) => sum + s.successRate, 0) / staves.length),
-    [],
-  );
+  let featured: Awaited<ReturnType<typeof listStaves>>["rows"] = [];
+  let total = 0;
+  let scribeCount = 0;
+  let tags: string[] = [];
 
-  const filteredStaves = useMemo(() => {
-    const lowered = query.trim().toLowerCase();
-    const category = FILTER_CATEGORIES.find((c) => c.id === activeFilter);
-    const categoryTags: readonly string[] | null =
-      category && "tags" in category ? category.tags : null;
-
-    return staves
-      .filter((stave) => {
-        if (lowered.length) {
-          const matchesText =
-            stave.title.toLowerCase().includes(lowered) ||
-            stave.scribe.toLowerCase().includes(lowered) ||
-            stave.description.toLowerCase().includes(lowered) ||
-            stave.tags.some((t) => t.toLowerCase().includes(lowered));
-          if (!matchesText) return false;
-        }
-        if (categoryTags) {
-          if (!stave.tags.some((t) => categoryTags.includes(t))) return false;
-        }
-        return true;
-      })
-      .sort((a, b) => b.upvotes - b.downvotes - (a.upvotes - a.downvotes));
-  }, [query, activeFilter]);
-
-  function formatBig(num: number): string {
-    if (num >= 1000) {
-      const k = num / 1000;
-      const rounded = k >= 10 ? Math.round(k) : Math.round(k * 10) / 10;
-      return `${rounded}k`;
-    }
-    return num.toLocaleString();
+  if (db) {
+    const [feed, scribes, trending] = await Promise.all([
+      listStaves(db, { status: "published", sort: "top", limit: 9 }),
+      getTopScribes(db, 100),
+      getTrendingTags(db, 8),
+    ]);
+    featured = feed.rows;
+    total = feed.total;
+    scribeCount = scribes.length;
+    tags = trending.map((t) => t.tag);
   }
 
   return (
@@ -83,16 +45,10 @@ export default function LandingPage() {
             </p>
             <div className="page-hero-stats" aria-label="Registry stats">
               <span className="stat-tiny">
-                <strong>{formatBig(staves.length)}</strong>staves
+                <strong>{total.toLocaleString()}</strong>staves
               </span>
               <span className="stat-tiny">
-                <strong>{totalScribes}</strong>scribes
-              </span>
-              <span className="stat-tiny">
-                <strong>{formatBig(totalInvocations)}</strong>invocations
-              </span>
-              <span className="stat-tiny">
-                <strong>{avgSuccess}%</strong>avg success
+                <strong>{scribeCount.toLocaleString()}</strong>scribes
               </span>
             </div>
           </div>
@@ -104,40 +60,45 @@ export default function LandingPage() {
 
       <div className="container">
         <div className="toolbar-row">
-          <div className="search-bar" role="search">
+          <form className="search-bar" role="search" action="/registry" method="get">
             <Search size={16} aria-hidden />
             <input
               type="search"
+              name="q"
               placeholder='Search staves — "code review", "knowledge base", "deploy"…'
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
               aria-label="Search staves"
             />
+          </form>
+        </div>
+
+        {tags.length > 0 ? (
+          <div className="filters" role="toolbar" aria-label="Browse by tag">
+            <span className="filters-label">Trending</span>
+            {tags.map((tag) => (
+              <Link key={tag} href={`/registry?tag=${tag}`} className="chip">
+                {tag}
+              </Link>
+            ))}
           </div>
+        ) : null}
+
+        <div className="section-head" style={{ marginTop: 8 }}>
+          <h2>Featured staves</h2>
+          <Link href="/registry" className="muted">
+            Browse all →
+          </Link>
         </div>
 
-        <div className="filters" role="toolbar" aria-label="Stave filters">
-          <span className="filters-label">Filter</span>
-          {FILTER_CATEGORIES.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              className={`chip ${activeFilter === cat.id ? "is-on" : ""}`}
-              onClick={() => setActiveFilter(cat.id)}
-              aria-pressed={activeFilter === cat.id}
-            >
-              {cat.label}
-            </button>
-          ))}
-        </div>
-
-        {filteredStaves.length === 0 ? (
+        {featured.length === 0 ? (
           <div style={{ padding: "48px 0", textAlign: "center" }}>
-            <p className="muted">No staves match this search.</p>
+            <p className="muted">Nothing published yet.</p>
+            <p className="muted">
+              <Link href="/loom">Open the Loom →</Link>
+            </p>
           </div>
         ) : (
           <div className="stave-grid">
-            {filteredStaves.map((stave) => (
+            {featured.map((stave) => (
               <StaveCard key={stave.id} stave={stave} />
             ))}
           </div>

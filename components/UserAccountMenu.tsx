@@ -121,12 +121,12 @@ export function UserAccountMenu({ user }: UserAccountMenuProps) {
           aria-labelledby="topbar-user-trigger"
         >
           <Link
-            href="/grimoire"
+            href="/saga"
             className="user-menu-item"
             role="menuitem"
             onClick={() => setOpen(false)}
           >
-            Your grimoire
+            Your saga
           </Link>
           <Link
             href="/library"
