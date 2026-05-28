@@ -142,6 +142,47 @@ export async function createStave(
   return { id };
 }
 
+export type UploadedStaveInput = {
+  authorId: string;
+  title: string;
+  body: string;
+  description: string | null;
+  tags: string[];
+  license: string;
+  files: { path: string; content: string }[];
+};
+
+/** Inserts a draft stave plus its package files in a single transaction. */
+export async function createUploadedStave(
+  db: GaldrDb,
+  input: UploadedStaveInput,
+): Promise<{ id: string }> {
+  const id = crypto.randomUUID();
+  await db.transaction(async (tx) => {
+    await tx.insert(staves).values({
+      id,
+      familyId: id,
+      slug: `draft-${id.slice(0, 8)}`,
+      authorId: input.authorId,
+      title: input.title,
+      description: input.description,
+      body: input.body,
+      tags: input.tags,
+      license: input.license,
+      status: "draft",
+      version: 1,
+    });
+    if (input.files.length > 0) {
+      await tx
+        .insert(staveFiles)
+        .values(
+          input.files.map((f) => ({ staveId: id, path: f.path, content: f.content })),
+        );
+    }
+  });
+  return { id };
+}
+
 export type UpdateStavePatch = Partial<{
   title: string;
   description: string | null;
@@ -197,6 +238,7 @@ export async function publishStave(
   id: string,
   slug: string,
   releaseNotes: string | null,
+  isPrivate = false,
 ): Promise<void> {
   await db
     .update(staves)
@@ -205,6 +247,7 @@ export async function publishStave(
       publishedAt: new Date(),
       slug,
       releaseNotes,
+      private: isPrivate,
       updatedAt: new Date(),
     })
     .where(and(eq(staves.id, id), isNull(staves.deletedAt)));
@@ -282,10 +325,13 @@ export async function getStavesByIds(
 export async function getStavesByAuthor(
   db: GaldrDb,
   authorId: string,
-  opts: { status?: StaveStatus } = {},
+  opts: { status?: StaveStatus; includePrivate?: boolean } = {},
 ): Promise<Stave[]> {
   const conditions = [eq(staves.authorId, authorId), isNull(staves.deletedAt)];
   if (opts.status) conditions.push(eq(staves.status, opts.status));
+  // Private staves are owner-only; callers serving a public audience pass
+  // includePrivate: false to exclude them.
+  if (opts.includePrivate === false) conditions.push(eq(staves.private, false));
   return db
     .select()
     .from(staves)
@@ -309,6 +355,7 @@ export async function getVersionsByFamily(
       and(
         eq(staves.familyId, familyId),
         eq(staves.status, "published"),
+        eq(staves.private, false),
         isNull(staves.deletedAt),
       ),
     )
@@ -352,6 +399,7 @@ type RawStaveMetricsRow = {
   tags: string[];
   status: string;
   license: string;
+  private: boolean;
   version: number;
   family_id: string;
   predecessor_id: string | null;
@@ -383,6 +431,7 @@ function mapMetricsRow(r: RawStaveMetricsRow): StaveWithMetrics {
     tags: r.tags ?? [],
     status: r.status,
     license: r.license,
+    private: r.private,
     version: r.version,
     familyId: r.family_id,
     predecessorId: r.predecessor_id,
@@ -416,7 +465,11 @@ export async function listStaves(
   const offset = opts.offset ?? 0;
   const sort = opts.sort ?? "top";
 
-  const where: SQL[] = [sql`s.deleted_at IS NULL`, sql`s.status = ${status}`];
+  const where: SQL[] = [
+    sql`s.deleted_at IS NULL`,
+    sql`s.status = ${status}`,
+    sql`s.private = false`,
+  ];
   if (opts.authorId) where.push(sql`s.author_id = ${opts.authorId}`);
   if (opts.q && opts.q.trim()) {
     const pattern = `%${opts.q.trim()}%`;
@@ -470,12 +523,14 @@ export async function listStaves(
                AND s2.version > s.version
                AND s2.deleted_at IS NULL
                AND s2.status = 'published'
+               AND s2.private = false
            ) AS has_newer_version,
            (
              SELECT s3.slug FROM staves s3
              WHERE s3.family_id = s.family_id
                AND s3.deleted_at IS NULL
                AND s3.status = 'published'
+               AND s3.private = false
              ORDER BY s3.version DESC
              LIMIT 1
            ) AS latest_slug,
@@ -513,7 +568,7 @@ export async function getTrendingTags(
   const result = await db.execute(sql`
     SELECT tag, COUNT(*) AS n
     FROM staves, UNNEST(tags) AS tag
-    WHERE status = 'published' AND deleted_at IS NULL
+    WHERE status = 'published' AND deleted_at IS NULL AND private = false
     GROUP BY tag
     ORDER BY n DESC
     LIMIT ${limit}
@@ -530,7 +585,7 @@ export async function getTopScribes(
     SELECT up.username, up.user_id, COUNT(s.id) AS stave_count
     FROM staves s
     JOIN user_profiles up ON up.user_id = s.author_id
-    WHERE s.status = 'published' AND s.deleted_at IS NULL
+    WHERE s.status = 'published' AND s.deleted_at IS NULL AND s.private = false
     GROUP BY up.username, up.user_id
     ORDER BY stave_count DESC
     LIMIT ${limit}

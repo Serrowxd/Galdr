@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  boolean,
   check,
   index,
   integer,
@@ -39,6 +40,9 @@ export const staves = pgTable(
 
     status: text("status").notNull().default("draft"),
     license: text("license").notNull().default("CC BY 4.0"),
+    // Unlisted + owner-only when true: published but hidden from registry,
+    // saga, and search; only the author can open its page. See spec 06.
+    private: boolean("private").notNull().default(false),
 
     // Version chain — semantics in spec 03.
     version: integer("version").notNull().default(1),

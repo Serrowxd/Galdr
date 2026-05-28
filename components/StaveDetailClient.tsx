@@ -551,8 +551,17 @@ export function StaveDetailClient({
               disabled={pending}
             >
               <GitFork size={13} />
-              Fork
+              {pending ? "Forking…" : "Fork"}
             </button>
+          ) : null}
+
+          {isLoaded && !isSignedIn && isPublished ? (
+            <GaldrSignInButton>
+              <span className="stave-action-btn">
+                <GitFork size={13} />
+                Sign in to fork
+              </span>
+            </GaldrSignInButton>
           ) : null}
 
           <Link
@@ -608,7 +617,7 @@ export function StaveDetailClient({
                 Sign in
               </button>
             </GaldrSignInButton>{" "}
-            to vote, save, fork, or comment.
+            to vote, save, or comment.
           </p>
         ) : null}
 

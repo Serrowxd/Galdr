@@ -60,8 +60,11 @@ export default async function SagaSlugPage({ params }: PageProps) {
   } = await supabase.auth.getUser();
   const isOwner = user?.id === profile.userId;
 
+  // Saga is the public profile — never surface private (unlisted) staves here,
+  // even to the owner. They manage those in the Library.
   const publishedRows = await getStavesByAuthor(db, profile.userId, {
     status: "published",
+    includePrivate: false,
   });
   const published = latestPerFamily(publishedRows);
   const drafts = isOwner

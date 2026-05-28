@@ -49,8 +49,12 @@ export async function POST(request: Request, context: Ctx) {
   }
 
   let releaseNotes: string | null = null;
+  let isPrivate = false;
   try {
-    const payload = (await request.json()) as { releaseNotes?: unknown };
+    const payload = (await request.json()) as {
+      releaseNotes?: unknown;
+      private?: unknown;
+    };
     if (payload && typeof payload.releaseNotes === "string") {
       const trimmed = payload.releaseNotes.trim();
       if (trimmed.length > MAX_RELEASE_NOTES) {
@@ -61,12 +65,15 @@ export async function POST(request: Request, context: Ctx) {
       }
       releaseNotes = trimmed || null;
     }
+    if (payload && typeof payload.private === "boolean") {
+      isPrivate = payload.private;
+    }
   } catch {
     // Body is optional — ignore absent/invalid JSON.
   }
 
   const slug = await generateUniqueSlug(db, slugifyTitle(stave.title));
-  await publishStave(db, id, slug, releaseNotes);
+  await publishStave(db, id, slug, releaseNotes, isPrivate);
 
   return NextResponse.json({ slug });
 }

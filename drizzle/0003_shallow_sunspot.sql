@@ -1,0 +1,1 @@
+ALTER TABLE "staves" ADD COLUMN "private" boolean DEFAULT false NOT NULL;

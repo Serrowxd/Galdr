@@ -36,6 +36,11 @@ export async function POST(_request: Request, context: Ctx) {
   if (parent.status !== "published") {
     return NextResponse.json({ error: "cannot_fork_draft" }, { status: 400 });
   }
+  // Private (unlisted) staves are owner-only — hide their existence from
+  // everyone else rather than letting them be forked into a caller-owned copy.
+  if (parent.private && parent.authorId !== user.id) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const { id: newId } = await forkStave(db, parent, user.id);
   return NextResponse.json({ id: newId });
