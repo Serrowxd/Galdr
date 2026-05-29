@@ -102,16 +102,7 @@ export default function UploadPage() {
   };
 
   return (
-    <section className="container">
-      <div className="page-hero">
-        <p className="page-hero-tag">Author a stave</p>
-        <h1>Import a stave</h1>
-        <p className="page-hero-sub">
-          Upload a zipped stave package. It lands as a draft in the Loom for review
-          before you publish.
-        </p>
-      </div>
-
+    <section className="container" style={{ paddingTop: 28 }}>
       {isLoaded && !isSignedIn ? (
         <div className="upload-gate">
           <p className="muted">Sign in to import a stave package.</p>

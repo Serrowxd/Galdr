@@ -1,9 +1,7 @@
-import Link from "next/link";
-
-import { RegistryControls } from "@/app/registry/RegistryControls";
-import { RegistryTypeTabs } from "@/app/registry/RegistryTypeTabs";
-import { GrimoireCard } from "@/components/GrimoireCard";
-import { StaveCard } from "@/components/StaveCard";
+import {
+  RegistrySurface,
+  type RegistryFeedItem,
+} from "@/app/registry/RegistrySurface";
 import { getDbOptional } from "@/db";
 import { listGrimoires } from "@/lib/grimoires";
 import { getTopScribes, getTrendingTags, listStaves } from "@/lib/staves";
@@ -84,13 +82,35 @@ export default async function RegistryPage({
   );
   const feed = type === "all" ? items.slice(0, LIMIT) : items;
 
+  const feedItems: RegistryFeedItem[] = feed.map((item) => {
+    const tags = item.data.tags ?? [];
+    return {
+      kind: item.kind,
+      id: item.id,
+      slug: item.data.slug,
+      title: item.data.title,
+      description:
+        item.kind === "stave"
+          ? item.data.description
+          : item.data.shortDescription,
+      tags,
+      version: item.data.version,
+      staveCount: item.kind === "grimoire" ? item.data.staveCount : 0,
+      authorUsername: item.data.authorUsername,
+      savesCount: item.data.savesCount,
+      downloadsCount: item.data.downloadsCount ?? 0,
+      upvotes: item.data.upvotes,
+      downvotes: item.data.downvotes,
+      isOrchestration: tags.includes("orchestration"),
+    };
+  });
+
   const staveTotal = staveResult.total;
   const grimoireTotal = grimoireResult.total;
   const allTotal = staveTotal + grimoireTotal;
   const total =
     type === "stave" ? staveTotal : type === "grimoire" ? grimoireTotal : allTotal;
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
-  const allTags = trendingTags.map((t) => t.tag);
 
   const pageHref = (n: number) => {
     const params = new URLSearchParams();
@@ -105,133 +125,19 @@ export default async function RegistryPage({
 
   return (
     <>
-      <section className="page-hero" aria-labelledby="registry-title">
-        <div className="container">
-          <p className="page-hero-tag">Browse the registry</p>
-          <h1 id="registry-title" className="page-hero-title">
-            Every stave. Every scribe.
-          </h1>
-          <p className="page-hero-sub">
-            Filter by tag, search by intent, and rank by what the community is
-            running this month.
-          </p>
-        </div>
-      </section>
-
-      <div className="container">
-        <RegistryControls allTags={allTags} />
-        <RegistryTypeTabs
+      <div className="reg-page">
+        <RegistrySurface
+          items={feedItems}
+          tags={trendingTags}
+          topScribes={topScribes}
           counts={{ all: allTotal, stave: staveTotal, grimoire: grimoireTotal }}
+          total={total}
+          page={page}
+          totalPages={totalPages}
+          startRank={offset + 1}
+          prevHref={page > 1 ? pageHref(page - 1) : null}
+          nextHref={page < totalPages ? pageHref(page + 1) : null}
         />
-
-        <div className="section-head">
-          <h2>Featured feed</h2>
-          <span className="muted">{total} entries</span>
-        </div>
-
-        <div className="col-grid" style={{ paddingTop: 16 }}>
-          <div>
-            {feed.length === 0 ? (
-              <div style={{ padding: "48px 0", textAlign: "center" }}>
-                <p className="muted">
-                  {total === 0 && !q && !tag
-                    ? "Nothing here yet."
-                    : "No entries match this search."}
-                </p>
-                <p className="muted">
-                  {total === 0 && !q && !tag ? (
-                    <Link href="/loom">Open the Loom →</Link>
-                  ) : (
-                    <Link href="/registry">Clear filters</Link>
-                  )}
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="stave-grid">
-                  {feed.map((item) =>
-                    item.kind === "stave" ? (
-                      <StaveCard key={`s-${item.id}`} stave={item.data} />
-                    ) : (
-                      <GrimoireCard
-                        key={`g-${item.id}`}
-                        grimoire={{
-                          slug: item.data.slug,
-                          title: item.data.title,
-                          shortDescription: item.data.shortDescription,
-                          tags: item.data.tags,
-                          version: item.data.version,
-                          staveCount: item.data.staveCount,
-                          sourceCount: item.data.sourceCount,
-                          upvotes: item.data.upvotes,
-                          downvotes: item.data.downvotes,
-                          downloadsCount: item.data.downloadsCount,
-                        }}
-                      />
-                    ),
-                  )}
-                </div>
-
-                {totalPages > 1 ? (
-                  <div
-                    className="filters"
-                    style={{ marginTop: 24, justifyContent: "center" }}
-                    aria-label="Pagination"
-                  >
-                    {page > 1 ? (
-                      <Link href={pageHref(page - 1)} className="chip">
-                        ← Prev
-                      </Link>
-                    ) : (
-                      <span className="chip" aria-disabled>
-                        ← Prev
-                      </span>
-                    )}
-                    <span className="filters-label">
-                      Page {page} of {totalPages}
-                    </span>
-                    {page < totalPages ? (
-                      <Link href={pageHref(page + 1)} className="chip">
-                        Next →
-                      </Link>
-                    ) : (
-                      <span className="chip" aria-disabled>
-                        Next →
-                      </span>
-                    )}
-                  </div>
-                ) : null}
-              </>
-            )}
-          </div>
-
-          <aside className="stack" style={{ gap: 16 }}>
-            <section className="side-card">
-              <h3 className="side-card-title">Trending tags</h3>
-              <div className="side-card-tags">
-                {trendingTags.map(({ tag: t, count }) => (
-                  <Link key={t} href={`/registry?tag=${t}`} className="tag">
-                    {t} <span className="chip-count">{count}</span>
-                  </Link>
-                ))}
-              </div>
-            </section>
-
-            <section className="side-card">
-              <h3 className="side-card-title">Top scribes</h3>
-              <ul className="side-card-list">
-                {topScribes.map((scribe) => (
-                  <li key={scribe.userId}>
-                    <Link href={`/saga/${scribe.username.toLowerCase()}`}>
-                      {scribe.username}
-                    </Link>
-                    <small>{scribe.staveCount} staves</small>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          </aside>
-        </div>
       </div>
 
       <footer className="footer">

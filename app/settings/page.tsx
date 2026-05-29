@@ -30,18 +30,6 @@ export default function SettingsPage() {
 
   return (
     <>
-      <section className="page-hero" aria-labelledby="settings-title">
-        <div className="container">
-          <p className="page-hero-tag">Account preferences</p>
-          <h1 id="settings-title" className="page-hero-title">
-            Settings.
-          </h1>
-          <p className="page-hero-sub">
-            Edit your profile and manage global AI provider defaults.
-          </p>
-        </div>
-      </section>
-
       <div className="container" style={{ paddingTop: 32, paddingBottom: 48 }}>
         <div style={{ display: "grid", gap: 16 }}>
           <h2 style={{ fontSize: 14, fontWeight: 500 }}>Profile</h2>
