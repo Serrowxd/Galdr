@@ -1,13 +1,63 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
+import { GrimoireCard } from "@/components/GrimoireCard";
 import { StaveCard } from "@/components/StaveCard";
 import { getDbOptional } from "@/db";
+import {
+  getGrimoiresByAuthor,
+  getGrimoiresByIds,
+  listSavedGrimoireIds,
+  type Grimoire,
+} from "@/lib/grimoires";
 import { listSavedStaveIds } from "@/lib/staveEngagement";
 import { createClient } from "@/lib/supabase/server";
 import { getStavesByAuthor, getStavesByIds, type Stave } from "@/lib/staves";
 
 export const dynamic = "force-dynamic";
+
+function GrimoireShelf({
+  title,
+  hint,
+  grimoires,
+  action,
+}: {
+  title: string;
+  hint: ReactNode;
+  grimoires: Grimoire[];
+  action?: ReactNode;
+}) {
+  return (
+    <section className="library-shelf">
+      <div className="section-head">
+        <h2>{title}</h2>
+        <span className="muted" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {grimoires.length} {grimoires.length === 1 ? "grimoire" : "grimoires"}
+          {action}
+        </span>
+      </div>
+      {grimoires.length === 0 ? (
+        <p className="muted library-shelf-empty">{hint}</p>
+      ) : (
+        <div className="stave-grid">
+          {grimoires.map((g) => (
+            <GrimoireCard
+              key={g.id}
+              grimoire={{
+                slug: g.slug,
+                title: g.title,
+                shortDescription: g.shortDescription,
+                tags: g.tags,
+                version: g.version,
+                staveCount: 0,
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 /** Collapse a version chain to its latest published version per family. */
 function latestPerFamily(staves: Stave[]): Stave[] {
@@ -63,15 +113,22 @@ export default async function LibraryPage() {
   let drafts: Stave[] = [];
   let published: Stave[] = [];
   let saved: Stave[] = [];
+  let draftGrimoires: Grimoire[] = [];
+  let savedGrimoires: Grimoire[] = [];
   if (user && db) {
-    const [draftRows, publishedRows, savedIds] = await Promise.all([
-      getStavesByAuthor(db, user.id, { status: "draft" }),
-      getStavesByAuthor(db, user.id, { status: "published" }),
-      listSavedStaveIds(db, user.id),
-    ]);
+    const [draftRows, publishedRows, savedIds, draftGrimoireRows, savedGrimoireIds] =
+      await Promise.all([
+        getStavesByAuthor(db, user.id, { status: "draft" }),
+        getStavesByAuthor(db, user.id, { status: "published" }),
+        listSavedStaveIds(db, user.id),
+        getGrimoiresByAuthor(db, user.id, { status: "draft" }),
+        listSavedGrimoireIds(db, user.id),
+      ]);
     drafts = draftRows;
     published = latestPerFamily(publishedRows);
     saved = await getStavesByIds(db, savedIds);
+    draftGrimoires = draftGrimoireRows;
+    savedGrimoires = await getGrimoiresByIds(db, savedGrimoireIds);
   }
 
   return (
@@ -124,6 +181,31 @@ export default async function LibraryPage() {
                 <>
                   Open a stave in the <Link href="/">registry</Link> and choose{" "}
                   <strong>Save to library</strong> to bookmark it here.
+                </>
+              }
+            />
+            <GrimoireShelf
+              title="Draft grimoires"
+              grimoires={draftGrimoires}
+              action={
+                <Link href="/grimoires/new" className="btn btn-primary btn-sm">
+                  Create Grimoire
+                </Link>
+              }
+              hint={
+                <>
+                  Curate an ordered collection of staves. Start one at{" "}
+                  <Link href="/grimoires/new">a new grimoire</Link>.
+                </>
+              }
+            />
+            <GrimoireShelf
+              title="Saved grimoires"
+              grimoires={savedGrimoires}
+              hint={
+                <>
+                  Open a grimoire in the <Link href="/registry">registry</Link> and choose{" "}
+                  <strong>Save</strong> to bookmark it here.
                 </>
               }
             />

@@ -19,6 +19,7 @@ import { VegvisirLogo } from "@/components/VegvisirLogo";
 import type { User } from "@supabase/supabase-js";
 
 const navLinks = [
+  { href: "/registry", label: "Registry" },
   { href: "/library", label: "Library" },
   { href: "/loom", label: "Loom" },
   { href: "/saga", label: "Saga" },
@@ -34,10 +35,7 @@ function PrimaryNavLinks({
   return (
     <>
       {navLinks.map((item) => {
-        const isActive =
-          item.href === "/saga"
-            ? pathname.startsWith("/saga")
-            : pathname.startsWith(item.href);
+        const isActive = pathname.startsWith(item.href);
         return (
           <Link
             key={item.href}

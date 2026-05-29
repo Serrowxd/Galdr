@@ -2661,3 +2661,296 @@ textarea {
   padding: 16px 0 4px;
   font-size: 13px;
 }
+
+/* ---------------------------------------------------------------------------
+   Grimoires (spec 07)
+   --------------------------------------------------------------------------- */
+
+/* ORCHESTRATION pill — purple, distinct from the gold accent used elsewhere. */
+.tag[data-orchestration="true"] {
+  color: #c4b5fd;
+  border-color: rgba(167, 139, 250, 0.4);
+  background: rgba(167, 139, 250, 0.12);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10.5px;
+}
+
+/* Ordered entry list on the detail page. */
+.grimoire-entry-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.grimoire-entry {
+  display: flex;
+  gap: 14px;
+  padding-bottom: 18px;
+}
+
+.grimoire-entry[data-dimmed="true"] {
+  opacity: 0.45;
+}
+
+.grimoire-entry-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.grimoire-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
+  font-size: 11px;
+  background: var(--accent-tint-07);
+}
+
+.grimoire-step[data-optional="true"] {
+  border-style: dashed;
+}
+
+.grimoire-connector {
+  flex: 1;
+  width: 1px;
+  margin-top: 4px;
+  background: var(--accent-tint-20);
+  min-height: 20px;
+}
+
+.grimoire-connector-arrow {
+  color: var(--accent-text-muted);
+  margin-top: -6px;
+}
+
+.grimoire-entry[data-dimmed="true"] .grimoire-connector {
+  background: var(--accent-tint-07);
+}
+
+/* Curator card (detail sidebar) */
+.grimoire-curator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.grimoire-avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* GrimoireCard in the registry — type label + foot */
+.grimoire-reg-card {
+  position: relative;
+}
+
+.grimoire-card-type {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-text-muted);
+}
+
+.grimoire-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.grimoire-card-foot strong {
+  color: var(--text);
+}
+
+.grimoire-card-counts {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.grimoire-card-counts span {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* Editor stave-search results */
+.grimoire-search-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface-elevated);
+}
+
+.grimoire-search-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.grimoire-search-row-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.grimoire-entry-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.grimoire-entry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.grimoire-entry-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.grimoire-entry-link {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.grimoire-entry-link:hover {
+  color: var(--accent);
+}
+
+.grimoire-entry-author {
+  font-size: 12px;
+  margin: 2px 0 0;
+}
+
+.grimoire-entry-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 6px 0 0;
+}
+
+/* Curator annotation — italic, gold left-border, subtle amber tint. */
+.grimoire-annotation {
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  border-left: 2px solid var(--accent-border);
+  background: var(--accent-tint-04);
+  padding: 4px 10px;
+  margin: 8px 0 0;
+}
+
+/* Editor */
+.grimoire-editor-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.grimoire-editor-entry {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface-elevated);
+}
+
+.grimoire-editor-entry-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.grimoire-drag-handle {
+  cursor: grab;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  touch-action: none;
+}
+
+.grimoire-drag-handle:active {
+  cursor: grabbing;
+}
+
+.grimoire-search-results {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.grimoire-publish-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--hairline);
+  background: var(--bg);
+}
+
+/* Add-to-grimoire modal */
+.grimoire-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.grimoire-dialog {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+}
