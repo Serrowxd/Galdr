@@ -31,6 +31,7 @@ export type RegistryFeedItem = {
   upvotes: number;
   downvotes: number;
   isOrchestration: boolean;
+  saved: boolean;
 };
 
 type TagCount = { tag: string; count: number };
@@ -51,7 +52,7 @@ type RegistrySurfaceProps = {
 
 function SaveButton({ item }: { item: RegistryFeedItem }) {
   const router = useRouter();
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(item.saved);
   const [busy, setBusy] = useState(false);
 
   const toggle = async (e: React.MouseEvent) => {

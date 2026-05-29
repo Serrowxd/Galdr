@@ -3,8 +3,10 @@ import {
   type RegistryFeedItem,
 } from "@/app/registry/RegistrySurface";
 import { getDbOptional } from "@/db";
-import { listGrimoires } from "@/lib/grimoires";
+import { listGrimoires, listSavedGrimoireIds } from "@/lib/grimoires";
+import { listSavedStaveIds } from "@/lib/staveEngagement";
 import { getTopScribes, getTrendingTags, listStaves } from "@/lib/staves";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -51,12 +53,23 @@ export default async function RegistryPage({
   // Both pools are queried so every tab can show an accurate count; the feed itself
   // is filtered by `type`. For the merged "all" view we merge-sort client-side and
   // report an approximate combined total (spec 07 #10 caveat).
-  const [staveResult, grimoireResult, trendingTags, topScribes] = await Promise.all([
-    listStaves(db, { status: "published", q, tag, sort, limit: LIMIT, offset }),
-    listGrimoires(db, { status: "published", q, tag, sort, limit: LIMIT, offset }),
-    getTrendingTags(db),
-    getTopScribes(db),
-  ]);
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const [staveResult, grimoireResult, trendingTags, topScribes, savedStaveIds, savedGrimoireIds] =
+    await Promise.all([
+      listStaves(db, { status: "published", q, tag, sort, limit: LIMIT, offset }),
+      listGrimoires(db, { status: "published", q, tag, sort, limit: LIMIT, offset }),
+      getTrendingTags(db),
+      getTopScribes(db),
+      user ? listSavedStaveIds(db, user.id) : Promise.resolve<string[]>([]),
+      user ? listSavedGrimoireIds(db, user.id) : Promise.resolve<string[]>([]),
+    ]);
+
+  const savedStaveSet = new Set(savedStaveIds);
+  const savedGrimoireSet = new Set(savedGrimoireIds);
 
   const items: FeedItem[] = [
     ...(wantStaves ? staveResult.rows : []).map((s) => ({
@@ -102,6 +115,10 @@ export default async function RegistryPage({
       upvotes: item.data.upvotes,
       downvotes: item.data.downvotes,
       isOrchestration: tags.includes("orchestration"),
+      saved:
+        item.kind === "stave"
+          ? savedStaveSet.has(item.id)
+          : savedGrimoireSet.has(item.id),
     };
   });
 
