@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   Bookmark,
+  BookMarked,
   ChevronRight,
   GitFork,
   MessageCircle,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import { AddToGrimoireDialog } from "@/components/grimoires/AddToGrimoireDialog";
 import { GaldrSignInButton } from "@/components/GaldrSignInButton";
 import { renderMarkdownPreview } from "@/lib/markdownPreview";
 import type { Stave, StaveVersion, ForkAttribution } from "@/lib/staves";
@@ -196,6 +198,8 @@ export function StaveDetailClient({
 
   const [showPublish, setShowPublish] = useState(false);
   const [releaseNotes, setReleaseNotes] = useState("");
+  const [showAddToGrimoire, setShowAddToGrimoire] = useState(false);
+  const [grimoireToast, setGrimoireToast] = useState<string | null>(null);
 
   const content = selectedPath ? pathToContent.get(selectedPath) ?? "" : "";
 
@@ -564,6 +568,27 @@ export function StaveDetailClient({
             </GaldrSignInButton>
           ) : null}
 
+          {isLoaded && isSignedIn && isPublished ? (
+            <button
+              type="button"
+              className="stave-action-btn"
+              onClick={() => setShowAddToGrimoire(true)}
+              disabled={pending}
+            >
+              <BookMarked size={13} />
+              Add to grimoire
+            </button>
+          ) : null}
+
+          {isLoaded && !isSignedIn && isPublished ? (
+            <GaldrSignInButton>
+              <span className="stave-action-btn">
+                <BookMarked size={13} />
+                Sign in to add to a grimoire
+              </span>
+            </GaldrSignInButton>
+          ) : null}
+
           <Link
             href={sagaHref}
             className="stave-action-link"
@@ -572,6 +597,19 @@ export function StaveDetailClient({
             View saga →
           </Link>
         </div>
+
+        {grimoireToast ? (
+          <p className="muted" style={{ fontSize: 12.5 }} role="status">
+            Added to <strong>{grimoireToast}</strong>.{" "}
+            <button
+              type="button"
+              className="stave-action-link"
+              onClick={() => setGrimoireToast(null)}
+            >
+              Dismiss
+            </button>
+          </p>
+        ) : null}
 
         {isAuthor ? (
           <div className="stave-actions">
@@ -715,6 +753,14 @@ export function StaveDetailClient({
           </div>
         ) : null}
       </section>
+      ) : null}
+
+      {showAddToGrimoire ? (
+        <AddToGrimoireDialog
+          staveFamilyId={stave.familyId}
+          onClose={() => setShowAddToGrimoire(false)}
+          onAdded={(title) => setGrimoireToast(title)}
+        />
       ) : null}
     </div>
   );

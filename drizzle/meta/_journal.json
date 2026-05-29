@@ -29,6 +29,13 @@
       "when": 1779958482593,
       "tag": "0003_shallow_sunspot",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780017559449,
+      "tag": "0004_sweet_crusher_hogan",
+      "breakpoints": true
     }
   ]
 }

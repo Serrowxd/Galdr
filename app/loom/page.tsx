@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck,
+  BookPlus,
   Code2,
   Copy,
   Eraser,
@@ -543,6 +544,10 @@ function LoomEditor() {
           <Link href="/upload" className="btn btn-ghost btn-sm">
             <Upload size={14} />
             Import .zip
+          </Link>
+          <Link href="/grimoires/new" className="btn btn-ghost btn-sm">
+            <BookPlus size={14} />
+            New grimoire
           </Link>
           <label className="loom-trace">
             Trace

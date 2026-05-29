@@ -18,6 +18,9 @@ import { applySecurityHeaders } from "@/lib/security/headers";
 const PROTECTED_ROUTES = [
   /^\/library(\/.*)?$/,
   /^\/settings(\/.*)?$/,
+  // Grimoire authoring is auth-only; the public detail route /grimoires/<slug> is not.
+  /^\/grimoires\/new$/,
+  /^\/grimoires\/[^/]+\/edit$/,
 ];
 
 function isProtected(pathname: string): boolean {
