@@ -11,10 +11,13 @@ export type StaveWithMetrics = Stave & {
   upvotes: number;
   downvotes: number;
   commentsCount: number;
+  savesCount: number;
+  downloadsCount: number;
   monthlyScore: number;
   hasNewerVersion: boolean;
   latestSlug: string | null;
   predecessorSlug: string | null;
+  authorUsername: string | null;
 };
 
 export type ListStavesOpts = {
@@ -413,10 +416,13 @@ type RawStaveMetricsRow = {
   upvotes: number | string;
   downvotes: number | string;
   comments_count: number | string;
+  saves_count: number | string;
+  downloads_count: number | string;
   monthly_score: number | string;
   has_newer_version: boolean;
   latest_slug: string | null;
   predecessor_slug: string | null;
+  author_username: string | null;
 };
 
 function mapMetricsRow(r: RawStaveMetricsRow): StaveWithMetrics {
@@ -445,10 +451,13 @@ function mapMetricsRow(r: RawStaveMetricsRow): StaveWithMetrics {
     upvotes: Number(r.upvotes),
     downvotes: Number(r.downvotes),
     commentsCount: Number(r.comments_count),
+    savesCount: Number(r.saves_count),
+    downloadsCount: Number(r.downloads_count),
     monthlyScore: Number(r.monthly_score),
     hasNewerVersion: hasNewer,
     latestSlug: hasNewer ? r.latest_slug : null,
     predecessorSlug: r.predecessor_slug,
+    authorUsername: r.author_username,
   };
 }
 
@@ -510,11 +519,24 @@ export async function listStaves(
         SELECT stave_id, COUNT(*) AS c
         FROM comments
         GROUP BY stave_id
+      ),
+      lifetime_s AS (
+        SELECT stave_id, COUNT(*) AS saves
+        FROM saved_staves
+        GROUP BY stave_id
+      ),
+      lifetime_d AS (
+        SELECT stave_id, COUNT(*) AS dl
+        FROM stave_downloads
+        GROUP BY stave_id
       )
     SELECT s.*,
            COALESCE(lifetime_v.up, 0)   AS upvotes,
            COALESCE(lifetime_v.down, 0) AS downvotes,
            COALESCE(lifetime_c.c, 0)    AS comments_count,
+           COALESCE(lifetime_s.saves, 0) AS saves_count,
+           COALESCE(lifetime_d.dl, 0)   AS downloads_count,
+           up.username AS author_username,
            COALESCE(monthly_v.m_up, 0) - COALESCE(monthly_v.m_down, 0)
              + COALESCE(monthly_d.m_dl, 0) AS monthly_score,
            EXISTS (
@@ -540,6 +562,9 @@ export async function listStaves(
     LEFT JOIN monthly_d  ON monthly_d.stave_id  = s.id
     LEFT JOIN lifetime_v ON lifetime_v.stave_id = s.id
     LEFT JOIN lifetime_c ON lifetime_c.stave_id = s.id
+    LEFT JOIN lifetime_s ON lifetime_s.stave_id = s.id
+    LEFT JOIN lifetime_d ON lifetime_d.stave_id = s.id
+    LEFT JOIN user_profiles up ON up.user_id = s.author_id
     WHERE ${whereSql}
     ORDER BY ${orderSql}
     LIMIT ${limit} OFFSET ${offset}

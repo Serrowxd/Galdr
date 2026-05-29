@@ -39,8 +39,10 @@ export type GrimoireWithMetrics = Grimoire & {
   downvotes: number;
   staveCount: number;
   sourceCount: number;
+  savesCount: number;
   monthlyScore: number;
   hasNewerVersion: boolean;
+  authorUsername: string | null;
 };
 
 export type ListGrimoiresOpts = {
@@ -963,8 +965,10 @@ type RawGrimoireMetricsRow = {
   downvotes: number | string;
   stave_count: number | string;
   source_count: number | string;
+  saves_count: number | string;
   monthly_score: number | string;
   has_newer_version: boolean;
+  author_username: string | null;
 };
 
 function mapMetricsRow(r: RawGrimoireMetricsRow): GrimoireWithMetrics {
@@ -993,8 +997,10 @@ function mapMetricsRow(r: RawGrimoireMetricsRow): GrimoireWithMetrics {
     downvotes: Number(r.downvotes),
     staveCount: Number(r.stave_count),
     sourceCount: Number(r.source_count),
+    savesCount: Number(r.saves_count),
     monthlyScore: Number(r.monthly_score),
     hasNewerVersion: Boolean(r.has_newer_version),
+    authorUsername: r.author_username,
   };
 }
 
@@ -1054,12 +1060,19 @@ export async function listGrimoires(
         FROM grimoire_entries ge
         JOIN staves s ON s.family_id = ge.stave_family_id AND s.deleted_at IS NULL
         GROUP BY ge.grimoire_id
+      ),
+      save_counts AS (
+        SELECT grimoire_id, COUNT(*) AS saves
+        FROM saved_grimoires
+        GROUP BY grimoire_id
       )
     SELECT g.*,
            COALESCE(lifetime_v.up, 0)   AS upvotes,
            COALESCE(lifetime_v.down, 0) AS downvotes,
            COALESCE(entry_counts.stave_count, 0) AS stave_count,
            COALESCE(source_counts.source_count, 0) AS source_count,
+           COALESCE(save_counts.saves, 0) AS saves_count,
+           up.username AS author_username,
            COALESCE(monthly_v.m_up, 0) - COALESCE(monthly_v.m_down, 0)
              + COALESCE(monthly_d.m_dl, 0) AS monthly_score,
            EXISTS (
@@ -1075,6 +1088,8 @@ export async function listGrimoires(
     LEFT JOIN lifetime_v   ON lifetime_v.grimoire_id   = g.id
     LEFT JOIN entry_counts ON entry_counts.grimoire_id = g.id
     LEFT JOIN source_counts ON source_counts.grimoire_id = g.id
+    LEFT JOIN save_counts ON save_counts.grimoire_id = g.id
+    LEFT JOIN user_profiles up ON up.user_id = g.author_id
     WHERE ${whereSql}
     ORDER BY ${orderSql}
     LIMIT ${limit} OFFSET ${offset}
