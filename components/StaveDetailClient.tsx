@@ -173,18 +173,32 @@ export function StaveDetailClient({
   const isLoaded = user !== undefined;
   const isSignedIn = user !== null && user !== undefined;
 
+  // Loom-authored staves carry their text in `stave.body` and have no package
+  // files. Fall back to a synthetic file so the inspector renders the body
+  // instead of an empty "No package files" panel. See the upload path
+  // (createUploadedStave) for staves that do ship real files.
+  const effectiveFiles = useMemo<StavePackageFile[]>(
+    () =>
+      packageFiles.length > 0
+        ? packageFiles
+        : stave.body
+          ? [{ path: "stave.md", content: stave.body }]
+          : [],
+    [packageFiles, stave.body],
+  );
+
   const defaultPath =
-    packageFiles.find((f) => f.path.endsWith("README.md"))?.path ??
-    packageFiles[0]?.path ??
+    effectiveFiles.find((f) => f.path.endsWith("README.md"))?.path ??
+    effectiveFiles[0]?.path ??
     "";
 
   const pathToContent = useMemo(() => {
     const map = new Map<string, string>();
-    packageFiles.forEach((f) => map.set(f.path, f.content));
+    effectiveFiles.forEach((f) => map.set(f.path, f.content));
     return map;
-  }, [packageFiles]);
+  }, [effectiveFiles]);
 
-  const tree = useMemo(() => buildTree(packageFiles), [packageFiles]);
+  const tree = useMemo(() => buildTree(effectiveFiles), [effectiveFiles]);
 
   const [selectedPath, setSelectedPath] = useState(defaultPath);
   const [tab, setTab] = useState<"raw" | "preview">("preview");
