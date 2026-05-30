@@ -11,11 +11,16 @@ import {
   recordGrimoireDownload,
   resolveGrimoireEntries,
 } from "@/lib/grimoires";
+import { clientIp, enforceRateLimit } from "@/lib/rateLimitGuard";
+import { isSafePath } from "@/lib/packageFileRules";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+const DOWNLOAD_RATE = 30;
+const RATE_WINDOW_MS = 60_000;
 
 // Worst case is 50 entries x 10 MB stave cap = 500 MB. We stream rather than buffer,
 // but still refuse pathological packages so a single download can't tie up a worker.
@@ -60,6 +65,14 @@ export async function GET(request: Request, context: Ctx) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
   }
+
+  // Throttle abuse: signed-in users key by id, anonymous by best-effort IP.
+  const limited = enforceRateLimit(
+    `grimoire-download:${userId ?? clientIp(request)}`,
+    DOWNLOAD_RATE,
+    RATE_WINDOW_MS,
+  );
+  if (limited) return limited;
 
   const url = new URL(request.url);
   const excludeParam = url.searchParams.get("exclude");
@@ -153,7 +166,10 @@ export async function GET(request: Request, context: Ctx) {
           if (r.resolved.status !== "ok") continue;
           const stave = r.resolved.stave;
           const dir = `${root}/staves/${pad2(i + 1)}-${stave.slug}`;
-          const files = await getStaveFilesFor(db, stave.id);
+          // Re-validate paths defensively so a bad row can't become a zip-slip.
+          const files = (await getStaveFilesFor(db, stave.id)).filter((f) =>
+            isSafePath(f.path),
+          );
           if (files.length === 0) {
             // Keep an empty marker so the run-order folder still exists.
             addText(`${dir}/.gitkeep`, "");

@@ -39,8 +39,11 @@ import { renderMarkdownPreview } from "@/lib/markdownPreview";
 import { getStaveAnalyzer, type CheckReport } from "@/lib/loom/analyzeStave";
 import { DEFAULT_LICENSE, LICENSES, toLicense } from "@/lib/loom/licenses";
 import { BASELINE_TAGS } from "@/lib/loom/tags";
+import { hasAllowedExtension, isSafePath } from "@/lib/packageFileRules";
+import type { StavePackageFile } from "@/lib/packageTree";
 import type { License } from "@/lib/staveValidation";
 import { GaldrSignInButton } from "@/components/GaldrSignInButton";
+import { PackageTree, type NodeRef } from "@/components/loom/PackageTree";
 import { createClient } from "@/lib/supabase/client";
 
 const initialMarkdown = `# Stave: Code Reviewer
@@ -114,6 +117,49 @@ function deriveTitle(md: string): string {
   return m ? m[1].trim() : "Untitled stave";
 }
 
+// --- Package-file helpers (Loom explorer) ----------------------------------
+const ENTRYPOINT_FALLBACK = "stave.md";
+
+function parentDir(path: string): string {
+  const i = path.lastIndexOf("/");
+  return i === -1 ? "" : path.slice(0, i);
+}
+
+function baseName(path: string): string {
+  const i = path.lastIndexOf("/");
+  return i === -1 ? path : path.slice(i + 1);
+}
+
+function joinPath(dir: string, name: string): string {
+  return dir ? `${dir}/${name}` : name;
+}
+
+/** All implicit directory prefixes occupied by a file set (for collision checks). */
+function dirPrefixes(files: StavePackageFile[]): Set<string> {
+  const dirs = new Set<string>();
+  for (const f of files) {
+    const parts = f.path.split("/");
+    for (let i = 1; i < parts.length; i++) dirs.add(parts.slice(0, i).join("/"));
+  }
+  return dirs;
+}
+
+/**
+ * Picks which file mirrors `body` when hydrating an existing stave: the file
+ * whose content already equals the body, else README.md, else stave.md, else the
+ * first file. Keeps `body` and the entrypoint coherent across reloads.
+ */
+function resolveEntrypoint(files: StavePackageFile[], body: string): string {
+  if (files.length === 0) return ENTRYPOINT_FALLBACK;
+  const byBody = files.find((f) => f.content === body);
+  if (byBody) return byBody.path;
+  const readme = files.find((f) => baseName(f.path).toLowerCase() === "readme.md");
+  if (readme) return readme.path;
+  const stave = files.find((f) => f.path === ENTRYPOINT_FALLBACK);
+  if (stave) return stave.path;
+  return files[0].path;
+}
+
 function buildTerminalLines(report: CheckReport, traceLevel: string): string[] {
   const lines: string[] = [
     `> quality-check profile: ${traceLevel}`,
@@ -140,7 +186,17 @@ function LoomEditor() {
   const idParam = searchParams.get("id");
 
   const initialSettings = loadGlobalAISettings();
+  // `markdown` is the live editor value for the currently-selected file. The full
+  // package lives in `files`; an effect keeps the selected file's row synced to
+  // `markdown` so all the existing editor tools (templates, tidy, undo, insert)
+  // operate on the selected file without per-call-site changes.
   const [markdown, setMarkdown] = useState(initialMarkdown);
+  const [files, setFiles] = useState<StavePackageFile[]>([
+    { path: ENTRYPOINT_FALLBACK, content: initialMarkdown },
+  ]);
+  const [extraDirs, setExtraDirs] = useState<string[]>([]);
+  const [selectedPath, setSelectedPath] = useState(ENTRYPOINT_FALLBACK);
+  const [entrypointPath, setEntrypointPath] = useState(ENTRYPOINT_FALLBACK);
   const [output, setOutput] = useState("");
   const [running, setRunning] = useState(false);
   const [activeResultTab, setActiveResultTab] = useState<"terminal" | "report" | "preview">(
@@ -285,6 +341,8 @@ function LoomEditor() {
           license: string;
           status: string;
           forkAttribution?: ForkBanner | null;
+          files?: StavePackageFile[] | null;
+          entrypointPath?: string | null;
         };
         if (cancelled) return;
         if (data.status === "published") {
@@ -292,7 +350,22 @@ function LoomEditor() {
           return;
         }
         setDraftId(data.id);
-        setMarkdown(data.body ?? "");
+        // Hydrate the package; staves authored before the explorer have a body but
+        // no file rows — synthesize a single entrypoint so the tree still renders.
+        const incoming =
+          Array.isArray(data.files) && data.files.length > 0
+            ? data.files
+            : [{ path: ENTRYPOINT_FALLBACK, content: data.body ?? "" }];
+        // Prefer the stored entrypoint; fall back to heuristic for legacy rows.
+        const entry =
+          data.entrypointPath && incoming.some((f) => f.path === data.entrypointPath)
+            ? data.entrypointPath
+            : resolveEntrypoint(incoming, data.body ?? "");
+        setFiles(incoming);
+        setExtraDirs([]);
+        setEntrypointPath(entry);
+        setSelectedPath(entry);
+        setMarkdown(incoming.find((f) => f.path === entry)?.content ?? data.body ?? "");
         setLicense(toLicense(data.license));
         setTitle(data.title ?? "");
         setDescription(data.description ?? "");
@@ -309,7 +382,174 @@ function LoomEditor() {
     };
   }, [idParam, draftId]);
 
+  // Flushes the selected file's live editor content back into a file list. Used
+  // before any switch/persist so unsaved edits to the outgoing file aren't lost.
+  // (We flush on transitions rather than via an effect to avoid cascading renders.)
+  const flushInto = (list: StavePackageFile[]): StavePackageFile[] =>
+    list.map((f) => (f.path === selectedPath ? { ...f, content: markdown } : f));
+
+  // Switch the editor to a different file, persisting the outgoing edits first.
+  const selectFile = (path: string) => {
+    if (path === selectedPath) return;
+    const target = files.find((f) => f.path === path);
+    if (!target) return;
+    setFiles((prev) => flushInto(prev));
+    setSelectedPath(path);
+    setMarkdown(target.content);
+    dismissUndo();
+  };
+
   const lineCount = useMemo(() => markdown.split("\n").length, [markdown]);
+
+  // --- Package mutations (emitted by PackageTree) --------------------------
+  // Any change flips the save status back so the cluster reads as unsaved.
+  const markDirty = () => setSaveState("idle");
+
+  const renameFilePath = (oldPath: string, newPath: string) => {
+    setFiles((prev) => prev.map((f) => (f.path === oldPath ? { ...f, path: newPath } : f)));
+    if (entrypointPath === oldPath) setEntrypointPath(newPath);
+    if (selectedPath === oldPath) setSelectedPath(newPath);
+  };
+
+  const reprefixDir = (oldPrefix: string, newPrefix: string) => {
+    const repath = (p: string) =>
+      p === oldPrefix
+        ? newPrefix
+        : p.startsWith(`${oldPrefix}/`)
+          ? newPrefix + p.slice(oldPrefix.length)
+          : p;
+    setFiles((prev) => prev.map((f) => ({ ...f, path: repath(f.path) })));
+    setExtraDirs((prev) => prev.map(repath));
+    if (entrypointPath === oldPrefix || entrypointPath.startsWith(`${oldPrefix}/`)) {
+      setEntrypointPath(repath(entrypointPath));
+    }
+    if (selectedPath === oldPrefix || selectedPath.startsWith(`${oldPrefix}/`)) {
+      setSelectedPath(repath(selectedPath));
+    }
+  };
+
+  // After removing the selected file (or its folder), fall back to the entrypoint,
+  // which is never deletable and therefore always present.
+  const selectFallback = (remaining: StavePackageFile[]) => {
+    const target = remaining.find((f) => f.path === entrypointPath) ?? remaining[0];
+    if (target) {
+      setSelectedPath(target.path);
+      setMarkdown(target.content);
+    }
+  };
+
+  const EXT_HINT = "Files must end in .md, .txt, .json, .yaml, or .yml.";
+
+  const handleCreateFile = (dir: string, name: string): string | null => {
+    if (name.includes("/")) return "Name can't contain a slash.";
+    const path = joinPath(dir, name);
+    if (!isSafePath(path)) return "That name isn't allowed.";
+    if (!hasAllowedExtension(name)) return EXT_HINT;
+    if (files.some((f) => f.path === path)) return "A file with that path already exists.";
+    if (dirPrefixes(files).has(path) || extraDirs.includes(path)) {
+      return "A folder already uses that name.";
+    }
+    setFiles((prev) => [...flushInto(prev), { path, content: "" }]);
+    setExtraDirs((prev) => prev.filter((d) => d !== dir));
+    setSelectedPath(path);
+    setMarkdown("");
+    dismissUndo();
+    markDirty();
+    return null;
+  };
+
+  const handleCreateFolder = (dir: string, name: string): string | null => {
+    if (name.includes("/")) return "Name can't contain a slash.";
+    const path = joinPath(dir, name);
+    if (!isSafePath(path)) return "That name isn't allowed.";
+    if (files.some((f) => f.path === path)) return "A file already uses that name.";
+    if (dirPrefixes(files).has(path) || extraDirs.includes(path)) {
+      return "That folder already exists.";
+    }
+    setExtraDirs((prev) => [...prev, path]);
+    markDirty();
+    return null;
+  };
+
+  const handleRename = (node: NodeRef, newName: string): string | null => {
+    if (newName.includes("/")) return "Name can't contain a slash.";
+    const newPath = joinPath(parentDir(node.path), newName);
+    if (newPath === node.path) return null;
+    if (!isSafePath(newPath)) return "That name isn't allowed.";
+    if (files.some((f) => f.path === newPath)) return "A file with that path already exists.";
+    if (dirPrefixes(files).has(newPath) || extraDirs.includes(newPath)) {
+      return "A folder already uses that name.";
+    }
+    if (node.isDir) {
+      reprefixDir(node.path, newPath);
+    } else {
+      if (!hasAllowedExtension(newName)) return EXT_HINT;
+      renameFilePath(node.path, newPath);
+    }
+    markDirty();
+    return null;
+  };
+
+  const handleDelete = (node: NodeRef): string | null => {
+    if (node.path === entrypointPath) return "The entrypoint can't be deleted.";
+    if (node.isDir) {
+      const prefix = node.path;
+      if (entrypointPath === prefix || entrypointPath.startsWith(`${prefix}/`)) {
+        return "That folder holds the entrypoint and can't be deleted.";
+      }
+      const remaining = files.filter(
+        (f) => !(f.path === prefix || f.path.startsWith(`${prefix}/`)),
+      );
+      setFiles(remaining);
+      setExtraDirs((prev) =>
+        prev.filter((d) => !(d === prefix || d.startsWith(`${prefix}/`))),
+      );
+      if (selectedPath === prefix || selectedPath.startsWith(`${prefix}/`)) {
+        selectFallback(remaining);
+      }
+    } else {
+      const remaining = files.filter((f) => f.path !== node.path);
+      setFiles(remaining);
+      if (selectedPath === node.path) selectFallback(remaining);
+    }
+    markDirty();
+    return null;
+  };
+
+  const handleMove = (node: NodeRef, destDir: string): string | null => {
+    if (node.isDir) {
+      const oldPrefix = node.path;
+      if (destDir === oldPrefix || destDir.startsWith(`${oldPrefix}/`)) {
+        return "Can't move a folder into itself.";
+      }
+      const newPrefix = joinPath(destDir, baseName(oldPrefix));
+      if (newPrefix === oldPrefix) return null;
+      if (!isSafePath(newPrefix)) return "That move isn't allowed.";
+      if (files.some((f) => f.path === newPrefix)) return "A file already uses that name.";
+      if (dirPrefixes(files).has(newPrefix) || extraDirs.includes(newPrefix)) {
+        return "A folder with that name already exists there.";
+      }
+      reprefixDir(oldPrefix, newPrefix);
+    } else {
+      const newPath = joinPath(destDir, baseName(node.path));
+      if (newPath === node.path) return null;
+      if (!isSafePath(newPath)) return "That move isn't allowed.";
+      if (files.some((f) => f.path === newPath)) return "A file already exists there.";
+      if (dirPrefixes(files).has(newPath) || extraDirs.includes(newPath)) {
+        return "A folder already uses that name.";
+      }
+      renameFilePath(node.path, newPath);
+    }
+    markDirty();
+    return null;
+  };
+
+  // Designate a different file as the entrypoint (its content becomes `body`).
+  const handleSetEntrypoint = (path: string) => {
+    if (path === entrypointPath || !files.some((f) => f.path === path)) return;
+    setEntrypointPath(path);
+    markDirty();
+  };
 
   const insertSnippet = (snippet: string, label: string) => {
     withUndo(label, () => {
@@ -393,15 +633,23 @@ function LoomEditor() {
   // latest content first so what goes public matches what's on screen).
   const persistDraft = async (): Promise<string | null> => {
     setSaveState("saving");
-    // The fold-out title wins when set; otherwise fall back to the H1.
-    const effectiveTitle = title.trim() || deriveTitle(markdown);
+    // Flush the selected file's live edits into the package, then mirror the
+    // entrypoint file into `body` (the public/canonical stave text).
+    const flushedFiles = flushInto(files);
+    const entry =
+      flushedFiles.find((f) => f.path === entrypointPath) ?? flushedFiles[0];
+    const bodyContent = entry ? entry.content : markdown;
+    // The fold-out title wins when set; otherwise fall back to the body H1.
+    const effectiveTitle = title.trim() || deriveTitle(bodyContent);
     const trimmedDescription = description.trim();
     const fields = {
       title: effectiveTitle,
-      body: markdown,
+      body: bodyContent,
       license,
       description: trimmedDescription || null,
       tags,
+      files: flushedFiles,
+      entrypointPath: entry ? entry.path : entrypointPath,
     };
 
     try {
@@ -461,7 +709,7 @@ function LoomEditor() {
   // rather than blank, and clears any stale publish error.
   const openPublish = () => {
     setPublishError(null);
-    if (!title.trim()) setTitle(deriveTitle(markdown));
+    if (!title.trim()) setTitle(deriveTitle(entrypointContent));
     setShowPublish(true);
   };
 
@@ -519,6 +767,13 @@ function LoomEditor() {
       setLoadError("error");
     }
   };
+
+  // The entrypoint's live content (the would-be `body`), accounting for unsaved
+  // edits when the entrypoint is the selected file.
+  const entrypointContent =
+    selectedPath === entrypointPath
+      ? markdown
+      : files.find((f) => f.path === entrypointPath)?.content ?? "";
 
   const saveStatusText =
     saveState === "saving"
@@ -595,7 +850,9 @@ function LoomEditor() {
                 type="button"
                 className="btn btn-primary btn-sm"
                 onClick={openPublish}
-                disabled={publishing || saveState === "saving" || !markdown.trim()}
+                disabled={
+                  publishing || saveState === "saving" || !entrypointContent.trim()
+                }
               >
                 <Send size={14} />
                 Publish
@@ -786,8 +1043,23 @@ function LoomEditor() {
       ) : null}
 
       <div className="loom-pane">
+        <PackageTree
+          files={files}
+          extraDirs={extraDirs}
+          selectedPath={selectedPath}
+          entrypointPath={entrypointPath}
+          onSelect={selectFile}
+          onCreateFile={handleCreateFile}
+          onCreateFolder={handleCreateFolder}
+          onRename={handleRename}
+          onDelete={handleDelete}
+          onMove={handleMove}
+          onSetEntrypoint={handleSetEntrypoint}
+        />
         <div className="loom-col">
-          <div className="loom-pane-head">Stave editor · {lineCount} lines</div>
+          <div className="loom-pane-head">
+            Editor · {selectedPath || "no file"} · {lineCount} lines
+          </div>
           <div className="loom-toolbar" role="toolbar" aria-label="Editor tools">
             <div className="loom-tool-group">
               <button

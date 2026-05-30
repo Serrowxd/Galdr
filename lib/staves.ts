@@ -1,7 +1,13 @@
-import { and, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, sql, type SQL } from "drizzle-orm";
 
 import type { GaldrDb } from "@/db";
-import { staveFiles, staves, userProfiles, type Stave } from "@/db/schema";
+import {
+  staveDownloads,
+  staveFiles,
+  staves,
+  userProfiles,
+  type Stave,
+} from "@/db/schema";
 
 export type { Stave } from "@/db/schema";
 
@@ -121,6 +127,11 @@ export type CreateStaveInput = {
   description?: string | null;
   tags?: string[];
   license?: string;
+  // Curated package files (Loom explorer). When present, written atomically with
+  // the draft row. The entrypoint file's content is also mirrored into `body`.
+  files?: { path: string; content: string }[];
+  // Path of the file that mirrors `body`. Null → resolved heuristically on load.
+  entrypointPath?: string | null;
 };
 
 export async function createStave(
@@ -129,18 +140,24 @@ export async function createStave(
 ): Promise<{ id: string }> {
   // Option B: generate the id in-app so family_id can equal it in one insert.
   const id = crypto.randomUUID();
-  await db.insert(staves).values({
-    id,
-    familyId: id,
-    slug: `draft-${id.slice(0, 8)}`,
-    authorId: input.authorId,
-    title: input.title,
-    body: input.body,
-    description: input.description ?? null,
-    tags: input.tags ?? [],
-    license: input.license ?? "CC BY 4.0",
-    status: "draft",
-    version: 1,
+  await db.transaction(async (tx) => {
+    await tx.insert(staves).values({
+      id,
+      familyId: id,
+      slug: `draft-${id.slice(0, 8)}`,
+      authorId: input.authorId,
+      title: input.title,
+      body: input.body,
+      entrypointPath: input.entrypointPath ?? null,
+      description: input.description ?? null,
+      tags: input.tags ?? [],
+      license: input.license ?? "CC BY 4.0",
+      status: "draft",
+      version: 1,
+    });
+    if (input.files && input.files.length > 0) {
+      await replaceStaveFiles(tx, id, input.files);
+    }
   });
   return { id };
 }
@@ -192,22 +209,33 @@ export type UpdateStavePatch = Partial<{
   body: string;
   tags: string[];
   license: string;
+  entrypointPath: string | null;
 }>;
 
-/** Refuses to mutate a published row (immutable releases — see spec 03). */
+/**
+ * Refuses to mutate a published row (immutable releases — see spec 03). When
+ * `files` is provided, the row update and the package-file swap run in one
+ * transaction so the body and its files never diverge.
+ */
 export async function updateStave(
   db: GaldrDb,
   id: string,
   patch: UpdateStavePatch,
+  files?: { path: string; content: string }[],
 ): Promise<{ ok: boolean; reason?: "not_found" | "published" }> {
   const existing = await getStaveById(db, id);
   if (!existing) return { ok: false, reason: "not_found" };
   if (existing.status === "published") return { ok: false, reason: "published" };
 
-  await db
-    .update(staves)
-    .set({ ...patch, updatedAt: new Date() })
-    .where(and(eq(staves.id, id), isNull(staves.deletedAt)));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(staves)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(and(eq(staves.id, id), isNull(staves.deletedAt)));
+    if (files) {
+      await replaceStaveFiles(tx, id, files);
+    }
+  });
   return { ok: true };
 }
 
@@ -219,6 +247,57 @@ export async function softDeleteStave(db: GaldrDb, id: string): Promise<void> {
 }
 
 type GaldrTx = Parameters<Parameters<GaldrDb["transaction"]>[0]>[0];
+
+/**
+ * Replaces a stave's entire package-file set: clears existing rows, inserts the
+ * new ones. Runs inside a caller-provided transaction so the swap is atomic with
+ * the body/title update. Callers must validate paths/sizes first
+ * (validatePackageFiles) — this trusts its input.
+ */
+export async function replaceStaveFiles(
+  tx: GaldrTx,
+  staveId: string,
+  files: { path: string; content: string }[],
+): Promise<void> {
+  await tx.delete(staveFiles).where(eq(staveFiles.staveId, staveId));
+  if (files.length > 0) {
+    await tx
+      .insert(staveFiles)
+      .values(files.map((f) => ({ staveId, path: f.path, content: f.content })));
+  }
+}
+
+/**
+ * Records a download (counts aggregated in listStaves and feed registry ranking).
+ * To blunt count-gaming, a signed-in user's repeat downloads of the same stave
+ * within `dedupeWindowMs` are not re-counted. Anonymous downloads can't be deduped
+ * without storing an identifier (we don't store IPs), so they rely on the route's
+ * rate limit instead. Returns true if a row was inserted.
+ */
+export async function recordStaveDownload(
+  db: GaldrDb,
+  staveId: string,
+  userId: string | null,
+  dedupeWindowMs = 60 * 60 * 1000, // 1 hour
+): Promise<boolean> {
+  if (userId) {
+    const since = new Date(Date.now() - dedupeWindowMs);
+    const [recent] = await db
+      .select({ id: staveDownloads.id })
+      .from(staveDownloads)
+      .where(
+        and(
+          eq(staveDownloads.staveId, staveId),
+          eq(staveDownloads.userId, userId),
+          gte(staveDownloads.downloadedAt, since),
+        ),
+      )
+      .limit(1);
+    if (recent) return false;
+  }
+  await db.insert(staveDownloads).values({ staveId, userId });
+  return true;
+}
 
 async function copyStaveFiles(
   tx: GaldrTx,
@@ -270,6 +349,7 @@ export async function createNewVersion(
       title: parent.title,
       description: parent.description,
       body: parent.body,
+      entrypointPath: parent.entrypointPath,
       tags: parent.tags,
       license: parent.license,
       status: "draft",
@@ -299,6 +379,7 @@ export async function forkStave(
       title: `${parent.title} (fork)`,
       description: parent.description,
       body: parent.body,
+      entrypointPath: parent.entrypointPath,
       tags: parent.tags,
       license: parent.license,
       status: "draft",
@@ -399,6 +480,7 @@ type RawStaveMetricsRow = {
   title: string;
   description: string | null;
   body: string;
+  entrypoint_path: string | null;
   tags: string[];
   status: string;
   license: string;
@@ -434,6 +516,7 @@ function mapMetricsRow(r: RawStaveMetricsRow): StaveWithMetrics {
     title: r.title,
     description: r.description,
     body: r.body,
+    entrypointPath: r.entrypoint_path,
     tags: r.tags ?? [],
     status: r.status,
     license: r.license,

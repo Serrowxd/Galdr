@@ -36,6 +36,13 @@
       "when": 1780017559449,
       "tag": "0004_sweet_crusher_hogan",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780113254367,
+      "tag": "0005_fuzzy_magdalene",
+      "breakpoints": true
     }
   ]
 }

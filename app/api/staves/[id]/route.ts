@@ -8,7 +8,12 @@ import {
   softDeleteStave,
   updateStave,
 } from "@/lib/staves";
-import { validateStaveFields } from "@/lib/staveValidation";
+import { getStaveFiles } from "@/lib/stavePackages";
+import {
+  validateEntrypointPath,
+  validatePackageFiles,
+  validateStaveFields,
+} from "@/lib/staveValidation";
 import { createClient } from "@/lib/supabase/server";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -46,7 +51,10 @@ export async function GET(_request: Request, context: Ctx) {
     ? await getStaveAttribution(db, stave.forkedFrom)
     : null;
 
-  return NextResponse.json({ ...stave, forkAttribution });
+  // Curated package files so the Loom can hydrate its explorer.
+  const files = await getStaveFiles(db, stave.id);
+
+  return NextResponse.json({ ...stave, forkAttribution, files });
 }
 
 export async function PATCH(request: Request, context: Ctx) {
@@ -96,13 +104,42 @@ export async function PATCH(request: Request, context: Ctx) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
 
-  const update = await updateStave(db, id, {
-    title: result.value.title,
-    body: result.value.body,
-    description: result.value.description,
-    tags: result.value.tags,
-    license: result.value.license,
-  });
+  // Optional package files. Only touched when the client sends `files`; a plain
+  // body-only PATCH leaves the existing package untouched.
+  const rawFiles = (payload as { files?: unknown }).files;
+  let files: { path: string; content: string }[] | undefined;
+  if (rawFiles != null) {
+    const filesResult = validatePackageFiles(rawFiles);
+    if (!filesResult.ok) {
+      return NextResponse.json({ error: filesResult.error }, { status: 400 });
+    }
+    files = filesResult.value;
+  }
+
+  // Entrypoint is validated against the incoming files when both are present.
+  const hasEntrypoint = "entrypointPath" in (payload as Record<string, unknown>);
+  const entrypoint = validateEntrypointPath(
+    (payload as { entrypointPath?: unknown }).entrypointPath,
+    files,
+  );
+  if (!entrypoint.ok) {
+    return NextResponse.json({ error: entrypoint.error }, { status: 400 });
+  }
+
+  const update = await updateStave(
+    db,
+    id,
+    {
+      title: result.value.title,
+      body: result.value.body,
+      description: result.value.description,
+      tags: result.value.tags,
+      license: result.value.license,
+      // Only touch the column when the client actually sent the field.
+      ...(hasEntrypoint ? { entrypointPath: entrypoint.value } : {}),
+    },
+    files,
+  );
   if (!update.ok) {
     if (update.reason === "published") {
       return NextResponse.json(

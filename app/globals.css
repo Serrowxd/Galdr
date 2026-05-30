@@ -1369,7 +1369,7 @@ textarea {
 
 .loom-pane {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 248px 1fr 1fr;
   min-height: calc(100vh - var(--topbar-h) - 64px);
   min-height: calc(100dvh - var(--topbar-h) - 64px);
   border-top: 0.5px solid var(--hairline);
@@ -1406,6 +1406,187 @@ textarea {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   border-bottom: 0.5px solid var(--hairline);
+}
+
+/* --- Loom package explorer (left column) --------------------------------- */
+.loom-tree-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 0.5px solid var(--hairline);
+}
+
+@media (max-width: 920px) {
+  .loom-tree-panel {
+    border-right: 0;
+    border-bottom: 0.5px solid var(--hairline);
+    max-height: 260px;
+  }
+}
+
+.loom-tree-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 0.5px solid var(--hairline);
+}
+
+.loom-tree-title {
+  font-size: 11px;
+  color: var(--text-soft);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.loom-tree-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.loom-tree-btn {
+  flex: 1;
+  justify-content: center;
+}
+
+.loom-tree-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-bottom: 0.5px solid var(--hairline);
+  background: var(--surface-sunken);
+}
+
+.loom-tree-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.loom-tree-error {
+  color: var(--danger, #e5658a);
+  font-size: 12px;
+  margin: 0;
+}
+
+.loom-tree-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+  min-height: 120px;
+  border-radius: var(--radius-sm);
+  transition: box-shadow 120ms, background-color 120ms;
+}
+
+/* Whole-package drop target (dropping onto empty space = root). */
+.loom-tree-scroll.is-root-drop {
+  background: var(--accent-tint-12);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* Row-level drop target: the folder/file the cursor is over while dragging. */
+.loom-tree-panel .stave-tree-row.is-drop-target {
+  background: var(--accent-tint-12);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.loom-tree-panel .stave-tree-row.is-dragging {
+  opacity: 0.4;
+}
+
+.loom-tree-panel .stave-tree-folder,
+.loom-tree-panel .stave-tree-file {
+  cursor: grab;
+}
+
+/* Floating preview that follows the cursor during a drag. */
+.loom-tree-drag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 12.5px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  cursor: grabbing;
+}
+
+/* --- Hierarchy guide lines (nested levels) ------------------------------- */
+.loom-tree-panel .stave-tree-list .stave-tree-list {
+  position: relative;
+  margin-left: 10px;
+  padding-left: 12px;
+  border-left: 1px solid var(--hairline);
+}
+
+.loom-tree-panel .stave-tree-list .stave-tree-list > li {
+  position: relative;
+}
+
+/* Elbow connector from the vertical guide line to each row. */
+.loom-tree-panel .stave-tree-list .stave-tree-list > li::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 14px;
+  width: 10px;
+  height: 1px;
+  background: var(--hairline);
+}
+
+.loom-tree-badge {
+  margin-left: auto;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 0.5px solid var(--accent-tint-12);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+}
+
+.loom-tree-menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--surface);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+}
+
+.loom-tree-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  transition: background-color 120ms, color 120ms;
+}
+
+.loom-tree-menu-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.loom-tree-menu-item.is-danger:hover {
+  color: var(--danger, #e5658a);
+}
+
+.loom-tree-menu-item.is-disabled {
+  color: var(--text-soft);
+  cursor: not-allowed;
 }
 
 .loom-toolbar {

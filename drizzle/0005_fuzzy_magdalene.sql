@@ -1,0 +1,1 @@
+ALTER TABLE "staves" ADD COLUMN "entrypoint_path" text;

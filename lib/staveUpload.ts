@@ -1,14 +1,18 @@
 import { unzipSync, strFromU8, type UnzipFileInfo } from "fflate";
 import { parse as parseYaml } from "yaml";
 
+import {
+  MAX_FILES,
+  MAX_FILE_BYTES,
+  MAX_TOTAL_BYTES,
+  checkPath,
+  hasAllowedExtension,
+} from "@/lib/packageFileRules";
 import { ALLOWED_LICENSES, type License } from "@/lib/staveValidation";
 
-export const MAX_FILES = 50;
-export const MAX_FILE_BYTES = 1_048_576; // 1 MB per file (matches stave_files CHECK)
-export const MAX_TOTAL_BYTES = 10_485_760; // 10 MB cumulative uncompressed
+export { MAX_FILES, MAX_FILE_BYTES, MAX_TOTAL_BYTES };
 export const MAX_UPLOAD_BYTES = 10_485_760; // 10 MB raw upload
 
-const ALLOWED_EXTENSIONS = [".md", ".txt", ".json", ".yaml", ".yml"];
 const MANIFEST_YAML = "stave.yaml";
 const MANIFEST_JSON = "stave.json";
 
@@ -86,41 +90,11 @@ class UploadValidationError extends Error {
   }
 }
 
-function hasAllowedExtension(name: string): boolean {
-  const lower = name.toLowerCase();
-  return ALLOWED_EXTENSIONS.some((ext) => lower.endsWith(ext));
-}
-
-function hasNullByte(name: string): boolean {
-  for (let i = 0; i < name.length; i++) {
-    if (name.charCodeAt(i) === 0) return true;
-  }
-  return false;
-}
-
 /** Rejects traversal, absolute, null-byte, backslash, and un-normalized paths. */
 function assertSafePath(name: string): void {
-  if (hasNullByte(name)) {
-    throw new UploadValidationError("invalid_path", { path: name, reason: "null_byte" });
-  }
-  if (name.startsWith("/")) {
-    throw new UploadValidationError("invalid_path", { path: name, reason: "absolute" });
-  }
-  if (name.includes("\\")) {
-    throw new UploadValidationError("invalid_path", { path: name, reason: "backslash" });
-  }
-  const segments = name.split("/");
-  for (const seg of segments) {
-    if (seg === "..") {
-      throw new UploadValidationError("invalid_path", { path: name, reason: "traversal" });
-    }
-    if (seg === ".") {
-      throw new UploadValidationError("invalid_path", { path: name, reason: "dot_segment" });
-    }
-    if (seg === "") {
-      // empty segment = leading slash (caught above) or a double slash
-      throw new UploadValidationError("invalid_path", { path: name, reason: "empty_segment" });
-    }
+  const problem = checkPath(name);
+  if (problem) {
+    throw new UploadValidationError("invalid_path", { path: name, reason: problem });
   }
 }
 

@@ -37,6 +37,9 @@ export const staves = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     body: text("body").notNull(),
+    // Path of the package file that mirrors `body` (the canonical stave text).
+    // Null for legacy rows — resolved heuristically from body content on load.
+    entrypointPath: text("entrypoint_path"),
     tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
 
     status: text("status").notNull().default("draft"),
