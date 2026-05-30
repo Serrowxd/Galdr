@@ -1,3 +1,11 @@
+import {
+  MAX_FILES,
+  MAX_FILE_BYTES,
+  MAX_TOTAL_BYTES,
+  checkPath,
+  hasAllowedExtension,
+} from "@/lib/packageFileRules";
+
 export const ALLOWED_LICENSES = ["CC BY 4.0", "CC0", "MIT", "ARR"] as const;
 export type License = (typeof ALLOWED_LICENSES)[number];
 
@@ -77,4 +85,87 @@ export function validateStaveFields(input: {
     ok: true,
     value: { title: input.title, body: input.body, description, tags, license },
   };
+}
+
+/**
+ * Validates an optional entrypoint path: null is allowed (resolved heuristically
+ * on load), and when given it must be one of the package files.
+ */
+export function validateEntrypointPath(
+  input: unknown,
+  files?: { path: string }[],
+): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (input == null) return { ok: true, value: null };
+  if (typeof input !== "string") {
+    return { ok: false, error: "entrypointPath must be a string" };
+  }
+  if (files && !files.some((f) => f.path === input)) {
+    return { ok: false, error: "entrypoint must be one of the package files" };
+  }
+  return { ok: true, value: input };
+}
+
+export type PackageFile = { path: string; content: string };
+
+/**
+ * Validates a curated package-file set (size/count/path/extension/uniqueness)
+ * for the save path. Mirrors the zip-upload rules via the shared
+ * lib/packageFileRules constraints so both ingest paths agree.
+ */
+export function validatePackageFiles(
+  input: unknown,
+): { ok: true; value: PackageFile[] } | { ok: false; error: string } {
+  if (!Array.isArray(input)) {
+    return { ok: false, error: "files must be an array" };
+  }
+  if (input.length === 0) {
+    return { ok: false, error: "at least one file is required" };
+  }
+  if (input.length > MAX_FILES) {
+    return { ok: false, error: `package exceeds ${MAX_FILES} files` };
+  }
+
+  const seen = new Set<string>();
+  let total = 0;
+  const files: PackageFile[] = [];
+
+  for (const raw of input) {
+    if (
+      typeof raw !== "object" ||
+      raw === null ||
+      typeof (raw as PackageFile).path !== "string" ||
+      typeof (raw as PackageFile).content !== "string"
+    ) {
+      return { ok: false, error: "each file needs a string path and content" };
+    }
+    const { path, content } = raw as PackageFile;
+
+    const pathProblem = checkPath(path);
+    if (pathProblem) {
+      return { ok: false, error: `unsafe file path (${pathProblem}): ${path}` };
+    }
+    if (!hasAllowedExtension(path)) {
+      return {
+        ok: false,
+        error: `disallowed file type: ${path} (allowed: .md, .txt, .json, .yaml, .yml)`,
+      };
+    }
+    if (seen.has(path)) {
+      return { ok: false, error: `duplicate file path: ${path}` };
+    }
+    seen.add(path);
+
+    const size = Buffer.byteLength(content, "utf8");
+    if (size > MAX_FILE_BYTES) {
+      return { ok: false, error: `file exceeds 1 MB: ${path}` };
+    }
+    total += size;
+    if (total > MAX_TOTAL_BYTES) {
+      return { ok: false, error: "package exceeds 10 MB total" };
+    }
+
+    files.push({ path, content });
+  }
+
+  return { ok: true, value: files };
 }

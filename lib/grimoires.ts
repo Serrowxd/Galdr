@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, sql, type SQL } from "drizzle-orm";
 
 import type { GaldrDb } from "@/db";
 import {
@@ -884,11 +884,33 @@ export async function listSavedGrimoireIds(
 }
 
 /** Records a download and bumps the denormalized counter. */
+/**
+ * Records a grimoire download. Like staves, a signed-in user's repeat downloads of
+ * the same grimoire within `dedupeWindowMs` are not re-counted (blunts ranking
+ * gaming); anonymous downloads rely on the route rate limit. Returns true if a row
+ * was inserted (and the denormalized counter bumped).
+ */
 export async function recordGrimoireDownload(
   db: GaldrDb,
   grimoireId: string,
   userId: string | null,
-): Promise<void> {
+  dedupeWindowMs = 60 * 60 * 1000, // 1 hour
+): Promise<boolean> {
+  if (userId) {
+    const since = new Date(Date.now() - dedupeWindowMs);
+    const [recent] = await db
+      .select({ id: grimoireDownloads.id })
+      .from(grimoireDownloads)
+      .where(
+        and(
+          eq(grimoireDownloads.grimoireId, grimoireId),
+          eq(grimoireDownloads.userId, userId),
+          gte(grimoireDownloads.downloadedAt, since),
+        ),
+      )
+      .limit(1);
+    if (recent) return false;
+  }
   await db.transaction(async (tx) => {
     await tx.insert(grimoireDownloads).values({ grimoireId, userId });
     await tx
@@ -896,6 +918,7 @@ export async function recordGrimoireDownload(
       .set({ downloadsCount: sql`${grimoires.downloadsCount} + 1` })
       .where(eq(grimoires.id, grimoireId));
   });
+  return true;
 }
 
 export async function incrementGrimoireViews(

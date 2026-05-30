@@ -7,6 +7,7 @@ import {
   Bookmark,
   BookMarked,
   ChevronRight,
+  Download,
   GitFork,
   MessageCircle,
   ThumbsDown,
@@ -17,6 +18,7 @@ import { createClient } from "@/lib/supabase/client";
 import { AddToGrimoireDialog } from "@/components/grimoires/AddToGrimoireDialog";
 import { GaldrSignInButton } from "@/components/GaldrSignInButton";
 import { renderMarkdownPreview } from "@/lib/markdownPreview";
+import { buildTree, type TreeNode } from "@/lib/packageTree";
 import type { Stave, StaveVersion, ForkAttribution } from "@/lib/staves";
 import type { StavePackageFile } from "@/lib/stavePackages";
 
@@ -26,57 +28,6 @@ export type StaveCommentDTO = {
   body: string;
   createdAt: string;
 };
-
-type TreeDir = { kind: "dir"; name: string; nodes: TreeNode[] };
-type TreeFile = { kind: "file"; name: string; path: string };
-type TreeNode = TreeDir | TreeFile;
-
-function buildTree(files: StavePackageFile[]): TreeNode[] {
-  type MDir = { kind: "dir"; name: string; nodes: MNode[] };
-  type MFile = { kind: "file"; name: string; path: string };
-  type MNode = MDir | MFile;
-
-  const root: MDir = { kind: "dir", name: "", nodes: [] };
-  const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path));
-
-  for (const file of sorted) {
-    const parts = file.path.split("/").filter(Boolean);
-    let cursor = root;
-    for (let i = 0; i < parts.length; i++) {
-      const segment = parts[i];
-      const isLeaf = i === parts.length - 1;
-      if (isLeaf) {
-        cursor.nodes.push({ kind: "file", name: segment, path: file.path });
-      } else {
-        let next = cursor.nodes.find(
-          (n): n is MDir => n.kind === "dir" && n.name === segment,
-        );
-        if (!next) {
-          next = { kind: "dir", name: segment, nodes: [] };
-          cursor.nodes.push(next);
-        }
-        cursor = next;
-      }
-    }
-  }
-
-  const sortNodes = (nodes: MNode[]): TreeNode[] => {
-    const dirs = nodes.filter((n): n is MDir => n.kind === "dir");
-    const leafs = nodes.filter((n): n is MFile => n.kind === "file");
-    dirs.sort((a, b) => a.name.localeCompare(b.name));
-    leafs.sort((a, b) => a.name.localeCompare(b.name));
-    return [
-      ...dirs.map((d) => ({
-        kind: "dir" as const,
-        name: d.name,
-        nodes: sortNodes(d.nodes),
-      })),
-      ...leafs,
-    ];
-  };
-
-  return sortNodes(root.nodes);
-}
 
 function TreeList({
   nodes,
@@ -214,6 +165,8 @@ export function StaveDetailClient({
   const [releaseNotes, setReleaseNotes] = useState("");
   const [showAddToGrimoire, setShowAddToGrimoire] = useState(false);
   const [grimoireToast, setGrimoireToast] = useState<string | null>(null);
+  const [showDownload, setShowDownload] = useState(false);
+  const [downloadFolder, setDownloadFolder] = useState("");
 
   const content = selectedPath ? pathToContent.get(selectedPath) ?? "" : "";
 
@@ -350,6 +303,24 @@ export function StaveDetailClient({
         setError("Could not fork stave.");
       }
     });
+  };
+
+  // Single-file staves download the raw markdown directly; multi-file packages
+  // first ask for a parent-folder name (defaulting to the author's username).
+  const triggerDownload = (folder?: string) => {
+    const trimmed = folder?.trim();
+    const query = trimmed ? `?folder=${encodeURIComponent(trimmed)}` : "";
+    window.location.href = `/api/staves/${stave.id}/download${query}`;
+    setShowDownload(false);
+  };
+
+  const startDownload = () => {
+    if (effectiveFiles.length > 1) {
+      setDownloadFolder("");
+      setShowDownload(true);
+    } else {
+      triggerDownload();
+    }
   };
 
   const remove = () => {
@@ -603,6 +574,16 @@ export function StaveDetailClient({
             </GaldrSignInButton>
           ) : null}
 
+          <button
+            type="button"
+            className="stave-action-btn"
+            onClick={startDownload}
+            disabled={pending}
+          >
+            <Download size={13} />
+            Download
+          </button>
+
           <Link
             href={sagaHref}
             className="stave-action-link"
@@ -611,6 +592,49 @@ export function StaveDetailClient({
             View saga →
           </Link>
         </div>
+
+        {showDownload ? (
+          <div className="stave-comment-compose" role="dialog" aria-label="Download package">
+            <label className="label-tiny" htmlFor="download-folder">
+              Parent folder name
+            </label>
+            <input
+              id="download-folder"
+              className="input"
+              value={downloadFolder}
+              maxLength={64}
+              placeholder={authorName}
+              onChange={(e) => setDownloadFolder(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  triggerDownload(downloadFolder);
+                }
+              }}
+            />
+            <p className="muted" style={{ fontSize: 12 }}>
+              This package has {effectiveFiles.length} files — they&apos;ll be zipped under
+              this folder. Left blank, we use <strong>{authorName}</strong>.
+            </p>
+            <div className="empty-state-actions">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowDownload(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => triggerDownload(downloadFolder)}
+              >
+                <Download size={13} />
+                Download .zip
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {grimoireToast ? (
           <p className="muted" style={{ fontSize: 12.5 }} role="status">

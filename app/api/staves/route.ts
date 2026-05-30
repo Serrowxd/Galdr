@@ -4,7 +4,11 @@ import { getDbOptional } from "@/db";
 import { getUserProfileByUserId } from "@/lib/profiles";
 import { enforceRateLimit } from "@/lib/rateLimitGuard";
 import { createStave, listStaves } from "@/lib/staves";
-import { validateStaveFields } from "@/lib/staveValidation";
+import {
+  validateEntrypointPath,
+  validatePackageFiles,
+  validateStaveFields,
+} from "@/lib/staveValidation";
 import { createClient } from "@/lib/supabase/server";
 
 const LIMIT = 24;
@@ -75,6 +79,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
 
+  // Optional curated package files (Loom explorer). Absent for plain body-only drafts.
+  const rawFiles = (payload as { files?: unknown }).files;
+  let files: { path: string; content: string }[] | undefined;
+  if (rawFiles != null) {
+    const filesResult = validatePackageFiles(rawFiles);
+    if (!filesResult.ok) {
+      return NextResponse.json({ error: filesResult.error }, { status: 400 });
+    }
+    files = filesResult.value;
+  }
+
+  const entrypoint = validateEntrypointPath(
+    (payload as { entrypointPath?: unknown }).entrypointPath,
+    files,
+  );
+  if (!entrypoint.ok) {
+    return NextResponse.json({ error: entrypoint.error }, { status: 400 });
+  }
+
   const { id } = await createStave(db, {
     authorId: user.id,
     title: result.value.title,
@@ -82,6 +105,8 @@ export async function POST(request: Request) {
     description: result.value.description,
     tags: result.value.tags,
     license: result.value.license,
+    files,
+    entrypointPath: entrypoint.value,
   });
 
   return NextResponse.json({ id }, { status: 201 });

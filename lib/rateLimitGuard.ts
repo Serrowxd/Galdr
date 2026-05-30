@@ -25,3 +25,14 @@ export function enforceRateLimit(
     },
   );
 }
+
+/**
+ * Best-effort client IP from proxy headers, for rate-limiting anonymous requests.
+ * Falls back to "unknown" (so all keyless clients share one bucket) when no header
+ * is present. Not trusted for security decisions — only for coarse abuse throttling.
+ */
+export function clientIp(request: Request): string {
+  const fwd = request.headers.get("x-forwarded-for");
+  if (fwd) return fwd.split(",")[0]!.trim();
+  return request.headers.get("x-real-ip")?.trim() || "unknown";
+}

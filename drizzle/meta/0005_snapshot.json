@@ -1,0 +1,1619 @@
+{
+  "id": "f4511695-e212-4598-96cd-32d1d94fe133",
+  "prevId": "6a9a66a3-114d-4f2a-bdaa-0dac32f57725",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.comments": {
+      "name": "comments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "stave_id": {
+          "name": "stave_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "author_label": {
+          "name": "author_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "comments_stave_id_idx": {
+          "name": "comments_stave_id_idx",
+          "columns": [
+            {
+              "expression": "stave_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "comments_stave_id_staves_id_fk": {
+          "name": "comments_stave_id_staves_id_fk",
+          "tableFrom": "comments",
+          "tableTo": "staves",
+          "columnsFrom": [
+            "stave_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.grimoire_downloads": {
+      "name": "grimoire_downloads",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "grimoire_id": {
+          "name": "grimoire_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "downloaded_at": {
+          "name": "downloaded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "grimoire_downloads_grimoire_downloaded_idx": {
+          "name": "grimoire_downloads_grimoire_downloaded_idx",
+          "columns": [
+            {
+              "expression": "grimoire_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "downloaded_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "grimoire_downloads_grimoire_id_grimoires_id_fk": {
+          "name": "grimoire_downloads_grimoire_id_grimoires_id_fk",
+          "tableFrom": "grimoire_downloads",
+          "tableTo": "grimoires",
+          "columnsFrom": [
+            "grimoire_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "grimoire_downloads_user_id_user_profiles_user_id_fk": {
+          "name": "grimoire_downloads_user_id_user_profiles_user_id_fk",
+          "tableFrom": "grimoire_downloads",
+          "tableTo": "user_profiles",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "user_id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.grimoire_entries": {
+      "name": "grimoire_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "grimoire_id": {
+          "name": "grimoire_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stave_family_id": {
+          "name": "stave_family_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pinned_stave_id": {
+          "name": "pinned_stave_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_optional": {
+          "name": "is_optional",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "annotation": {
+          "name": "annotation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "grimoire_entries_grimoire_position_idx": {
+          "name": "grimoire_entries_grimoire_position_idx",
+          "columns": [
+            {
+              "expression": "grimoire_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "grimoire_entries_stave_family_idx": {
+          "name": "grimoire_entries_stave_family_idx",
+          "columns": [
+            {
+              "expression": "stave_family_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "grimoire_entries_pinned_stave_idx": {
+          "name": "grimoire_entries_pinned_stave_idx",
+          "columns": [
+            {
+              "expression": "pinned_stave_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"grimoire_entries\".\"pinned_stave_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "grimoire_entries_grimoire_id_grimoires_id_fk": {
+          "name": "grimoire_entries_grimoire_id_grimoires_id_fk",
+          "tableFrom": "grimoire_entries",
+          "tableTo": "grimoires",
+          "columnsFrom": [
+            "grimoire_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "grimoire_entries_pinned_stave_id_staves_id_fk": {
+          "name": "grimoire_entries_pinned_stave_id_staves_id_fk",
+          "tableFrom": "grimoire_entries",
+          "tableTo": "staves",
+          "columnsFrom": [
+            "pinned_stave_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "g_entry_position_unique": {
+          "name": "g_entry_position_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "grimoire_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "g_entry_annotation_len": {
+          "name": "g_entry_annotation_len",
+          "value": "\"grimoire_entries\".\"annotation\" IS NULL OR char_length(\"grimoire_entries\".\"annotation\") <= 1000"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.grimoire_inclusion_events": {
+      "name": "grimoire_inclusion_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "grimoire_id": {
+          "name": "grimoire_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stave_family_id": {
+          "name": "stave_family_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stave_author_id": {
+          "name": "stave_author_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grimoire_author_id": {
+          "name": "grimoire_author_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grimoire_version": {
+          "name": "grimoire_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "grimoire_inclusion_events_stave_author_idx": {
+          "name": "grimoire_inclusion_events_stave_author_idx",
+          "columns": [
+            {
+              "expression": "stave_author_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "grimoire_inclusion_events_grimoire_idx": {
+          "name": "grimoire_inclusion_events_grimoire_idx",
+          "columns": [
+            {
+              "expression": "grimoire_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "grimoire_inclusion_events_grimoire_id_grimoires_id_fk": {
+          "name": "grimoire_inclusion_events_grimoire_id_grimoires_id_fk",
+          "tableFrom": "grimoire_inclusion_events",
+          "tableTo": "grimoires",
+          "columnsFrom": [
+            "grimoire_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "grimoire_inclusion_events_stave_author_id_user_profiles_user_id_fk": {
+          "name": "grimoire_inclusion_events_stave_author_id_user_profiles_user_id_fk",
+          "tableFrom": "grimoire_inclusion_events",
+          "tableTo": "user_profiles",
+          "columnsFrom": [
+            "stave_author_id"
+          ],
+          "columnsTo": [
+            "user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "grimoire_inclusion_events_grimoire_author_id_user_profiles_user_id_fk": {
+          "name": "grimoire_inclusion_events_grimoire_author_id_user_profiles_user_id_fk",
+          "tableFrom": "grimoire_inclusion_events",
+          "tableTo": "user_profiles",
+          "columnsFrom": [
+            "grimoire_author_id"
+          ],
+          "columnsTo": [
+            "user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "g_inclusion_event_type_check": {
+          "name": "g_inclusion_event_type_check",
+          "value": "\"grimoire_inclusion_events\".\"event_type\" IN ('included', 'removed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.grimoire_votes": {
+      "name": "grimoire_votes",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grimoire_id": {
+          "name": "grimoire_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "grimoire_votes_grimoire_idx": {
+          "name": "grimoire_votes_grimoire_idx",
+          "columns": [
+            {
+              "expression": "grimoire_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "grimoire_votes_user_id_user_profiles_user_id_fk": {
+          "name": "grimoire_votes_user_id_user_profiles_user_id_fk",
+          "tableFrom": "grimoire_votes",
+          "tableTo": "user_profiles",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "grimoire_votes_grimoire_id_grimoires_id_fk": {
+          "name": "grimoire_votes_grimoire_id_grimoires_id_fk",
+          "tableFrom": "grimoire_votes",
+          "tableTo": "grimoires",
+          "columnsFrom": [
+            "grimoire_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "grimoire_votes_user_id_grimoire_id_pk": {
+          "name": "grimoire_votes_user_id_grimoire_id_pk",
+          "columns": [
+            "user_id",
+            "grimoire_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "g_vote_value_check": {
+          "name": "g_vote_value_check",
+          "value": "\"grimoire_votes\".\"value\" IN (1, -1)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.grimoires": {
+      "name": "grimoires",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "author_id": {
+          "name": "author_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "short_description": {
+          "name": "short_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "details": {
+          "name": "details",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tags": {
+          "name": "tags",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "license": {
+          "name": "license",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'CC BY 4.0'"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "family_id": {
+          "name": "family_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "predecessor_id": {
+          "name": "predecessor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "forked_from": {
+          "name": "forked_from",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "release_notes": {
+          "name": "release_notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "views_count": {
+          "name": "views_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "downloads_count": {
+          "name": "downloads_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "grimoires_author_id_idx": {
+          "name": "grimoires_author_id_idx",
+          "columns": [
+            {
+              "expression": "author_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "grimoires_status_published_idx": {
+          "name": "grimoires_status_published_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "published_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"grimoires\".\"deleted_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "grimoires_family_version_idx": {
+          "name": "grimoires_family_version_idx",
+          "columns": [
+            {
+              "expression": "family_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "grimoires_forked_from_idx": {
+          "name": "grimoires_forked_from_idx",
+          "columns": [
+            {
+              "expression": "forked_from",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"grimoires\".\"forked_from\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "grimoires_author_id_user_profiles_user_id_fk": {
+          "name": "grimoires_author_id_user_profiles_user_id_fk",
+          "tableFrom": "grimoires",
+          "tableTo": "user_profiles",
+          "columnsFrom": [
+            "author_id"
+          ],
+          "columnsTo": [
+            "user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "grimoires_predecessor_id_grimoires_id_fk": {
+          "name": "grimoires_predecessor_id_grimoires_id_fk",
+          "tableFrom": "grimoires",
+          "tableTo": "grimoires",
+          "columnsFrom": [
+            "predecessor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "grimoires_forked_from_grimoires_id_fk": {
+          "name": "grimoires_forked_from_grimoires_id_fk",
+          "tableFrom": "grimoires",
+          "tableTo": "grimoires",
+          "columnsFrom": [
+            "forked_from"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "grimoires_slug_unique": {
+          "name": "grimoires_slug_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "slug"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "g_title_len": {
+          "name": "g_title_len",
+          "value": "char_length(\"grimoires\".\"title\") <= 200"
+        },
+        "g_short_desc_len": {
+          "name": "g_short_desc_len",
+          "value": "\"grimoires\".\"short_description\" IS NULL OR char_length(\"grimoires\".\"short_description\") <= 500"
+        },
+        "g_details_len": {
+          "name": "g_details_len",
+          "value": "\"grimoires\".\"details\" IS NULL OR char_length(\"grimoires\".\"details\") <= 20000"
+        },
+        "g_tags_count": {
+          "name": "g_tags_count",
+          "value": "array_length(\"grimoires\".\"tags\", 1) IS NULL OR array_length(\"grimoires\".\"tags\", 1) <= 10"
+        },
+        "g_release_notes_len": {
+          "name": "g_release_notes_len",
+          "value": "\"grimoires\".\"release_notes\" IS NULL OR char_length(\"grimoires\".\"release_notes\") <= 500"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.saved_grimoires": {
+      "name": "saved_grimoires",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grimoire_id": {
+          "name": "grimoire_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "saved_grimoires_user_idx": {
+          "name": "saved_grimoires_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "saved_grimoires_user_id_user_profiles_user_id_fk": {
+          "name": "saved_grimoires_user_id_user_profiles_user_id_fk",
+          "tableFrom": "saved_grimoires",
+          "tableTo": "user_profiles",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "saved_grimoires_grimoire_id_grimoires_id_fk": {
+          "name": "saved_grimoires_grimoire_id_grimoires_id_fk",
+          "tableFrom": "saved_grimoires",
+          "tableTo": "grimoires",
+          "columnsFrom": [
+            "grimoire_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "saved_grimoires_user_id_grimoire_id_pk": {
+          "name": "saved_grimoires_user_id_grimoire_id_pk",
+          "columns": [
+            "user_id",
+            "grimoire_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.saved_staves": {
+      "name": "saved_staves",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stave_id": {
+          "name": "stave_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "saved_staves_user_idx": {
+          "name": "saved_staves_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "saved_staves_stave_id_staves_id_fk": {
+          "name": "saved_staves_stave_id_staves_id_fk",
+          "tableFrom": "saved_staves",
+          "tableTo": "staves",
+          "columnsFrom": [
+            "stave_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "saved_staves_user_id_stave_id_pk": {
+          "name": "saved_staves_user_id_stave_id_pk",
+          "columns": [
+            "user_id",
+            "stave_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.stave_downloads": {
+      "name": "stave_downloads",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "stave_id": {
+          "name": "stave_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "downloaded_at": {
+          "name": "downloaded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "stave_downloads_stave_downloaded_idx": {
+          "name": "stave_downloads_stave_downloaded_idx",
+          "columns": [
+            {
+              "expression": "stave_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "downloaded_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "stave_downloads_stave_id_staves_id_fk": {
+          "name": "stave_downloads_stave_id_staves_id_fk",
+          "tableFrom": "stave_downloads",
+          "tableTo": "staves",
+          "columnsFrom": [
+            "stave_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "stave_downloads_user_id_user_profiles_user_id_fk": {
+          "name": "stave_downloads_user_id_user_profiles_user_id_fk",
+          "tableFrom": "stave_downloads",
+          "tableTo": "user_profiles",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "user_id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.stave_files": {
+      "name": "stave_files",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "stave_id": {
+          "name": "stave_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "stave_files_stave_id_idx": {
+          "name": "stave_files_stave_id_idx",
+          "columns": [
+            {
+              "expression": "stave_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "stave_files_stave_id_staves_id_fk": {
+          "name": "stave_files_stave_id_staves_id_fk",
+          "tableFrom": "stave_files",
+          "tableTo": "staves",
+          "columnsFrom": [
+            "stave_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "stave_files_stave_path_uniq": {
+          "name": "stave_files_stave_path_uniq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "stave_id",
+            "path"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "file_content_size": {
+          "name": "file_content_size",
+          "value": "octet_length(\"stave_files\".\"content\") <= 1048576"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.stave_votes": {
+      "name": "stave_votes",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stave_id": {
+          "name": "stave_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "stave_votes_stave_id_idx": {
+          "name": "stave_votes_stave_id_idx",
+          "columns": [
+            {
+              "expression": "stave_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "stave_votes_stave_id_staves_id_fk": {
+          "name": "stave_votes_stave_id_staves_id_fk",
+          "tableFrom": "stave_votes",
+          "tableTo": "staves",
+          "columnsFrom": [
+            "stave_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "stave_votes_user_id_stave_id_pk": {
+          "name": "stave_votes_user_id_stave_id_pk",
+          "columns": [
+            "user_id",
+            "stave_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.staves": {
+      "name": "staves",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "author_id": {
+          "name": "author_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entrypoint_path": {
+          "name": "entrypoint_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tags": {
+          "name": "tags",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "license": {
+          "name": "license",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'CC BY 4.0'"
+        },
+        "private": {
+          "name": "private",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "family_id": {
+          "name": "family_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "predecessor_id": {
+          "name": "predecessor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "forked_from": {
+          "name": "forked_from",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "release_notes": {
+          "name": "release_notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "views_count": {
+          "name": "views_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "staves_author_id_idx": {
+          "name": "staves_author_id_idx",
+          "columns": [
+            {
+              "expression": "author_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "staves_status_published_idx": {
+          "name": "staves_status_published_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "published_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"staves\".\"deleted_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "staves_family_version_idx": {
+          "name": "staves_family_version_idx",
+          "columns": [
+            {
+              "expression": "family_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "staves_forked_from_idx": {
+          "name": "staves_forked_from_idx",
+          "columns": [
+            {
+              "expression": "forked_from",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"staves\".\"forked_from\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "staves_author_id_user_profiles_user_id_fk": {
+          "name": "staves_author_id_user_profiles_user_id_fk",
+          "tableFrom": "staves",
+          "tableTo": "user_profiles",
+          "columnsFrom": [
+            "author_id"
+          ],
+          "columnsTo": [
+            "user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "staves_predecessor_id_staves_id_fk": {
+          "name": "staves_predecessor_id_staves_id_fk",
+          "tableFrom": "staves",
+          "tableTo": "staves",
+          "columnsFrom": [
+            "predecessor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "staves_forked_from_staves_id_fk": {
+          "name": "staves_forked_from_staves_id_fk",
+          "tableFrom": "staves",
+          "tableTo": "staves",
+          "columnsFrom": [
+            "forked_from"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "staves_slug_unique": {
+          "name": "staves_slug_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "slug"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "title_len": {
+          "name": "title_len",
+          "value": "char_length(\"staves\".\"title\") <= 200"
+        },
+        "description_len": {
+          "name": "description_len",
+          "value": "\"staves\".\"description\" IS NULL OR char_length(\"staves\".\"description\") <= 2000"
+        },
+        "body_size": {
+          "name": "body_size",
+          "value": "octet_length(\"staves\".\"body\") <= 1048576"
+        },
+        "tags_count": {
+          "name": "tags_count",
+          "value": "array_length(\"staves\".\"tags\", 1) IS NULL OR array_length(\"staves\".\"tags\", 1) <= 10"
+        },
+        "release_notes_len": {
+          "name": "release_notes_len",
+          "value": "\"staves\".\"release_notes\" IS NULL OR char_length(\"staves\".\"release_notes\") <= 500"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.user_profiles": {
+      "name": "user_profiles",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bio": {
+          "name": "bio",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avatar_url": {
+          "name": "avatar_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_profiles_username_unique": {
+          "name": "user_profiles_username_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "username"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
