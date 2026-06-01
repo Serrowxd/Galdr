@@ -16,13 +16,8 @@ export type StaveCardData = {
   latestSlug?: string | null;
 };
 
-const ORCHESTRATION_TAG = "orchestration";
-
 export function StaveCard({ stave }: { stave: StaveCardData }) {
-  const isOrchestration = stave.tags.includes(ORCHESTRATION_TAG);
-  const keywordTags = stave.tags
-    .filter((t) => t !== ORCHESTRATION_TAG)
-    .slice(0, 4);
+  const keywordTags = stave.tags.slice(0, 4);
   const score = (stave.upvotes ?? 0) - (stave.downvotes ?? 0);
 
   return (
@@ -30,9 +25,6 @@ export function StaveCard({ stave }: { stave: StaveCardData }) {
       <div className="stave-card-top">
         <div className="stave-card-title">{stave.title}</div>
         <div className="stave-card-title-tags">
-          {isOrchestration ? (
-            <span className="tag orchestration">orchestration</span>
-          ) : null}
           <span className="tag stave-type">Stave</span>
           <span className="tag hi">v{stave.version}</span>
         </div>

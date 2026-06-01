@@ -114,7 +114,7 @@ export default async function RegistryPage({
       downloadsCount: item.data.downloadsCount ?? 0,
       upvotes: item.data.upvotes,
       downvotes: item.data.downvotes,
-      isOrchestration: tags.includes("orchestration"),
+      isOrchestration: item.kind === "grimoire" && tags.includes("orchestration"),
       saved:
         item.kind === "stave"
           ? savedStaveSet.has(item.id)

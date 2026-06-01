@@ -19,9 +19,10 @@ import { VegvisirLogo } from "@/components/VegvisirLogo";
 import type { User } from "@supabase/supabase-js";
 
 const navLinks = [
+  { href: "/about", label: "About" },
   { href: "/registry", label: "Registry" },
-  { href: "/library", label: "Library" },
   { href: "/loom", label: "Loom" },
+  { href: "/library", label: "Library" },
   { href: "/saga", label: "Saga" },
 ];
 
