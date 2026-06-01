@@ -1057,8 +1057,20 @@ function LoomEditor() {
           onSetEntrypoint={handleSetEntrypoint}
         />
         <div className="loom-col">
-          <div className="loom-pane-head">
-            Editor · {selectedPath || "no file"} · {lineCount} lines
+          <div className="loom-pane-head loom-editor-head">
+            <span>Editor · {selectedPath || "no file"} · {lineCount} lines</span>
+            {undoState ? (
+              <div className="loom-undo-group" role="status" aria-live="polite">
+                <button
+                  type="button"
+                  className="loom-tool-btn loom-undo-btn"
+                  onClick={applyUndo}
+                  title={`Undo: ${undoState.label}`}
+                >
+                  <Undo2 size={13} /> Undo {undoState.label.toLowerCase()}
+                </button>
+              </div>
+            ) : null}
           </div>
           <div className="loom-toolbar" role="toolbar" aria-label="Editor tools">
             <div className="loom-tool-group">
@@ -1098,23 +1110,6 @@ function LoomEditor() {
                 <Table size={13} /> Table
               </button>
             </div>
-
-            {undoState ? (
-              <div
-                className="loom-tool-group loom-undo-group"
-                role="status"
-                aria-live="polite"
-              >
-                <button
-                  type="button"
-                  className="loom-tool-btn loom-undo-btn"
-                  onClick={applyUndo}
-                  title={`Undo: ${undoState.label}`}
-                >
-                  <Undo2 size={13} /> Undo {undoState.label.toLowerCase()}
-                </button>
-              </div>
-            ) : null}
 
             <div className="loom-tool-group">
               <label className="loom-template">

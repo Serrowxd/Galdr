@@ -373,8 +373,7 @@ function StaveRow({
 }) {
   const router = useRouter();
   const href = `/staves/${row.slug}`;
-  const isOrchestration = row.tags.includes(ORCHESTRATION_TAG);
-  const keywordTags = row.tags.filter((t) => t !== ORCHESTRATION_TAG).slice(0, 3);
+  const keywordTags = row.tags.slice(0, 3);
 
   return (
     <div className="lib-b-row">
@@ -390,9 +389,6 @@ function StaveRow({
         <div className="lib-b-row-title-line">
           <span className="lib-b-row-title">{row.title}</span>
           <span className="lib-b-row-title-tags">
-            {isOrchestration ? (
-              <span className="tag orchestration">orchestration</span>
-            ) : null}
             <span className="tag stave-type">Stave</span>
             <span className="tag hi">v{row.version}</span>
             {row.status === "draft" ? <span className="tag">draft</span> : null}
