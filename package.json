@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "seed:tavern-cold-start": "npx tsx scripts/seed-tavern-cold-start.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
