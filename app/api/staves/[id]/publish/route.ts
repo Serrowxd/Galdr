@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 
+import { and, eq, isNull } from "drizzle-orm";
+
 import { getDbOptional } from "@/db";
+import { staves, threads } from "@/db/schema";
 import { enforceRateLimit } from "@/lib/rateLimitGuard";
-import { getStaveById, publishStave } from "@/lib/staves";
+import { getStaveById } from "@/lib/staves";
 import { generateUniqueSlug, slugifyTitle } from "@/lib/staveSlug";
 import { createClient } from "@/lib/supabase/server";
+import { deriveAutoThreadTitle, reserveAutoThreadSlug } from "@/lib/threads";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -73,7 +77,38 @@ export async function POST(request: Request, context: Ctx) {
   }
 
   const slug = await generateUniqueSlug(db, slugifyTitle(stave.title), stave.id);
-  await publishStave(db, id, slug, releaseNotes, isPrivate);
+  const isHeadOfFamily = stave.id === stave.familyId;
+
+  await db.transaction(async (tx) => {
+    // 1. Publish the stave (inline equivalent of publishStave, within the tx).
+    await tx
+      .update(staves)
+      .set({
+        status: "published",
+        publishedAt: new Date(),
+        slug,
+        releaseNotes,
+        private: isPrivate,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(staves.id, id), isNull(staves.deletedAt)));
+
+    // 2. Auto-create a discussion thread only for the head of a family.
+    if (isHeadOfFamily) {
+      const threadSlug = await reserveAutoThreadSlug(tx, slug);
+      await tx.insert(threads).values({
+        staveFamilyId: stave.familyId,
+        authorId: stave.authorId,
+        title: deriveAutoThreadTitle(stave),
+        slug: threadSlug,
+        opBody: "",
+        isAutoCreated: true,
+        isPinned: true,
+        status: "open",
+        format: "discussion",
+      });
+    }
+  });
 
   return NextResponse.json({ slug });
 }

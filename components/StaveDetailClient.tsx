@@ -19,6 +19,7 @@ import { GaldrSignInButton } from "@/components/GaldrSignInButton";
 import { renderMarkdownPreview } from "@/lib/markdownPreview";
 import { buildTree, type TreeNode } from "@/lib/packageTree";
 import { defaultTabFor, type TabId } from "@/lib/staveTabs";
+import { MarkdownComposer } from "@/components/composer/MarkdownComposer";
 import type {
   ForkAttribution,
   Stave,
@@ -26,6 +27,7 @@ import type {
   StaveVersion,
 } from "@/lib/staves";
 import type { StavePackageFile } from "@/lib/stavePackages";
+import type { AutoThread } from "@/lib/threads";
 
 type GrimoireRef = { slug: string; title: string; staveCount: number };
 
@@ -44,6 +46,7 @@ type StaveDetailClientProps = {
   packageFiles: StavePackageFile[];
   forkedFrom: ForkAttribution | null;
   initialSaved: boolean;
+  autoThread: AutoThread | null;
 };
 
 // --- small formatters -------------------------------------------------------
@@ -134,6 +137,114 @@ function FileTree({
   );
 }
 
+// --- Discussion tab ----------------------------------------------------------
+
+function DiscussionTabBody({
+  autoThread,
+  isAuthor,
+  staveSlug,
+  userId,
+}: {
+  autoThread: AutoThread | null;
+  isAuthor: boolean;
+  staveSlug: string;
+  userId: string | null;
+}) {
+  const router = useRouter();
+  const [editOpen, setEditOpen] = useState(false);
+
+  if (!autoThread) {
+    return (
+      <p className="stave08-empty">
+        No discussion thread yet — one will be created when this stave is published.
+      </p>
+    );
+  }
+
+  const hasOpBody = autoThread.opBody.trim().length > 0;
+  const tavernHref = `/tavern/${autoThread.slug}`;
+
+  if (hasOpBody) {
+    const excerpt =
+      autoThread.opBody.trim().length > 280
+        ? autoThread.opBody.trim().slice(0, 280) + "…"
+        : autoThread.opBody.trim();
+    return (
+      <div className="stave08-discussion">
+        <h3 className="stave08-discussion-title">
+          <Link href={tavernHref}>{autoThread.title}</Link>
+        </h3>
+        <p className="stave08-discussion-excerpt">{excerpt}</p>
+        <div className="stave08-discussion-meta">
+          <span>Score: {autoThread.voteScore}</span>
+          <span>{autoThread.commentsCount} comments</span>
+          <Link href={tavernHref}>View in Tavern →</Link>
+        </div>
+      </div>
+    );
+  }
+
+  // No OP body — author sees edit nudge, others see a plain link.
+  if (isAuthor) {
+    return (
+      <div className="stave08-discussion">
+        <h3 className="stave08-discussion-title">
+          <Link href={tavernHref}>{autoThread.title}</Link>
+        </h3>
+        {editOpen ? (
+          <MarkdownComposer
+            scope={{ type: "op", threadId: autoThread.id }}
+            placeholder="Write an introduction for this stave's discussion thread…"
+            submitLabel="Save"
+            cancelLabel="Cancel"
+            showCancel
+            maxLength={65536}
+            userId={userId}
+            layout="inline"
+            onSubmit={async (body) => {
+              const res = await fetch(`/api/threads/${autoThread.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ opBody: body }),
+              });
+              if (!res.ok) return { ok: false, error: await res.text() };
+              setEditOpen(false);
+              router.refresh();
+              return { ok: true };
+            }}
+            onCancel={() => setEditOpen(false)}
+          />
+        ) : (
+          <>
+            <p className="stave08-empty">
+              No OP body yet. Add an introduction to your discussion thread.
+            </p>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setEditOpen(true)}
+            >
+              [EDIT OP BODY]
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // Visitor — no OP body.
+  return (
+    <div className="stave08-discussion">
+      <Link href={tavernHref} className="stave08-discussion-title">
+        {autoThread.title}
+      </Link>
+      <p className="stave08-discussion-meta">
+        No description yet · {autoThread.commentsCount} comments
+      </p>
+    </div>
+  );
+}
+
 export function StaveDetailClient({
   stave,
   authorName,
@@ -149,6 +260,7 @@ export function StaveDetailClient({
   packageFiles,
   forkedFrom,
   initialSaved,
+  autoThread,
 }: StaveDetailClientProps) {
   const router = useRouter();
 
@@ -563,10 +675,12 @@ export function StaveDetailClient({
           ) : null}
 
           {activeTab === "discussion" ? (
-            <p className="stave08-empty">
-              No discussion yet — threads arrive with the Tavern. This tab will hold
-              the auto-created discussion plus Q&amp;A and showcase threads.
-            </p>
+            <DiscussionTabBody
+              autoThread={autoThread}
+              isAuthor={isAuthor}
+              staveSlug={stave.slug}
+              userId={user?.id ?? null}
+            />
           ) : null}
 
           {activeTab === "versions" ? (

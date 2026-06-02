@@ -5,6 +5,7 @@ import {
   check,
   index,
   integer,
+  pgEnum,
   pgTable,
   primaryKey,
   smallint,
@@ -397,3 +398,231 @@ export type GrimoireVote = typeof grimoireVotes.$inferSelect;
 export type SavedGrimoire = typeof savedGrimoires.$inferSelect;
 export type GrimoireDownload = typeof grimoireDownloads.$inferSelect;
 export type GrimoireInclusionEvent = typeof grimoireInclusionEvents.$inferSelect;
+
+// ============================================================
+// TAVERN ENUMS
+// ============================================================
+
+export const threadCategory = pgEnum("thread_category", [
+  "tutorial",
+  "pattern",
+  "question",
+  "showcase",
+  "meta",
+]);
+
+export const threadFormat = pgEnum("thread_format", ["discussion", "documentation"]);
+
+// ============================================================
+// TAVERN TABLES
+// ============================================================
+
+export const threads = pgTable(
+  "threads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    staveFamilyId: uuid("stave_family_id").references(() => staves.id),
+    category: threadCategory("category"),
+    format: threadFormat("format").notNull().default("discussion"),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => userProfiles.userId, { onDelete: "restrict" }),
+    title: text("title").notNull(),
+    slug: text("slug").notNull().unique(),
+    opBody: text("op_body").notNull().default(""),
+    opEditedAt: timestamp("op_edited_at", { withTimezone: true }),
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    status: text("status").notNull().default("open"),
+    isPinned: boolean("is_pinned").notNull().default(false),
+    isAutoCreated: boolean("is_auto_created").notNull().default(false),
+    voteScore: integer("vote_score").notNull().default(0),
+    monthlyScore: integer("monthly_score").notNull().default(0),
+    commentsCount: integer("comments_count").notNull().default(0),
+    viewsCount: integer("views_count").notNull().default(0),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    statusCheck: check(
+      "threads_status_check",
+      sql`${t.status} IN ('open', 'locked', 'archived')`,
+    ),
+    tagsCountCheck: check(
+      "threads_tags_count_check",
+      sql`array_length(${t.tags}, 1) IS NULL OR array_length(${t.tags}, 1) <= 8`,
+    ),
+    tagsShapeCheck: check(
+      "threads_tags_shape_check",
+      sql`tags_are_valid_slugs(${t.tags})`,
+    ),
+    opBodySizeCheck: check(
+      "threads_op_body_size_check",
+      sql`octet_length(${t.opBody}) <= 65536`,
+    ),
+    // NOTE: the DEFERRABLE version of this unique constraint is added by the raw SQL
+    // migration (0006_tavern_schema.sql). Drizzle cannot express DEFERRABLE.
+    staveFamilyUnique: unique("threads_one_per_stave_family").on(t.staveFamilyId),
+    staveFamilyIdx: index("threads_stave_family_id_idx")
+      .on(t.staveFamilyId)
+      .where(sql`${t.deletedAt} IS NULL`),
+    categoryIdx: index("threads_category_idx")
+      .on(t.category)
+      .where(sql`${t.deletedAt} IS NULL`),
+    lastActivityIdx: index("threads_last_activity_idx")
+      .on(t.lastActivityAt.desc())
+      .where(sql`${t.deletedAt} IS NULL`),
+    monthlyScoreIdx: index("threads_monthly_score_idx")
+      .on(t.monthlyScore.desc())
+      .where(sql`${t.deletedAt} IS NULL`),
+  }),
+);
+
+export const threadComments = pgTable(
+  "thread_comments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => threads.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => userProfiles.userId, { onDelete: "restrict" }),
+    replyTo: uuid("reply_to").references((): AnyPgColumn => threadComments.id, {
+      onDelete: "cascade",
+    }),
+    body: text("body").notNull(),
+    editedAt: timestamp("edited_at", { withTimezone: true }),
+    voteScore: integer("vote_score").notNull().default(0),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    bodySizeCheck: check(
+      "thread_comments_body_size_check",
+      sql`octet_length(${t.body}) <= 16384`,
+    ),
+    threadCreatedIdx: index("thread_comments_thread_created_idx")
+      .on(t.threadId, t.createdAt)
+      .where(sql`${t.deletedAt} IS NULL`),
+    replyToIdx: index("thread_comments_reply_to_idx")
+      .on(t.replyTo)
+      .where(sql`${t.deletedAt} IS NULL`),
+  }),
+);
+
+export const threadVotes = pgTable(
+  "thread_votes",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => userProfiles.userId, { onDelete: "cascade" }),
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => threads.id, { onDelete: "cascade" }),
+    value: smallint("value").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.threadId] }),
+    valueCheck: check("thread_votes_value_check", sql`${t.value} IN (-1, 1)`),
+    threadIdx: index("thread_votes_thread_id_idx").on(t.threadId),
+    createdAtIdx: index("thread_votes_created_at_idx").on(t.createdAt.desc()),
+  }),
+);
+
+export const commentVotes = pgTable(
+  "comment_votes",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => userProfiles.userId, { onDelete: "cascade" }),
+    commentId: uuid("comment_id")
+      .notNull()
+      .references(() => threadComments.id, { onDelete: "cascade" }),
+    value: smallint("value").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.commentId] }),
+    valueCheck: check("comment_votes_value_check", sql`${t.value} IN (-1, 1)`),
+    commentIdx: index("comment_votes_comment_id_idx").on(t.commentId),
+  }),
+);
+
+export const savedThreads = pgTable(
+  "saved_threads",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => userProfiles.userId, { onDelete: "cascade" }),
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => threads.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.threadId] }),
+  }),
+);
+
+export const threadViews = pgTable(
+  "thread_views",
+  {
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => threads.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => userProfiles.userId, {
+      onDelete: "set null",
+    }),
+    viewedAt: timestamp("viewed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.threadId, t.userId, t.viewedAt] }),
+    threadViewedIdx: index("thread_views_thread_viewed_idx").on(
+      t.threadId,
+      t.viewedAt.desc(),
+    ),
+  }),
+);
+
+export const threadFlags = pgTable(
+  "thread_flags",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    threadId: uuid("thread_id").references(() => threads.id, { onDelete: "cascade" }),
+    commentId: uuid("comment_id").references(() => threadComments.id, {
+      onDelete: "cascade",
+    }),
+    reporterId: uuid("reporter_id")
+      .notNull()
+      .references(() => userProfiles.userId, { onDelete: "cascade" }),
+    reason: text("reason").notNull(),
+    status: text("status").notNull().default("open"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => ({
+    xorCheck: check(
+      "thread_flags_xor_check",
+      sql`(${t.threadId} IS NOT NULL AND ${t.commentId} IS NULL) OR (${t.threadId} IS NULL AND ${t.commentId} IS NOT NULL)`,
+    ),
+  }),
+);
+
+// ============================================================
+// TAVERN INFER TYPES
+// ============================================================
+
+export type Thread = typeof threads.$inferSelect;
+export type NewThread = typeof threads.$inferInsert;
+export type ThreadComment = typeof threadComments.$inferSelect;
+export type NewThreadComment = typeof threadComments.$inferInsert;
+export type ThreadVote = typeof threadVotes.$inferSelect;
+export type CommentVote = typeof commentVotes.$inferSelect;
+export type SavedThread = typeof savedThreads.$inferSelect;
+export type ThreadView = typeof threadViews.$inferSelect;
+export type ThreadFlag = typeof threadFlags.$inferSelect;

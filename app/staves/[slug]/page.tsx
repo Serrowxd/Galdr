@@ -17,6 +17,7 @@ import {
   getVersionsByFamily,
 } from "@/lib/staves";
 import { getStaveFiles } from "@/lib/stavePackages";
+import { getAutoThreadForFamily } from "@/lib/threads";
 
 export const dynamic = "force-dynamic";
 
@@ -73,7 +74,7 @@ export default async function StaveDetailPage({
 
   // Everything below depends only on the already-loaded `stave`, so fetch it all
   // in one round-trip rather than waterfalling.
-  const [versions, author, packageFiles, grimoires, stats, scribeStats, forkedFrom] =
+  const [versions, author, packageFiles, grimoires, stats, scribeStats, forkedFrom, autoThread] =
     await Promise.all([
       getVersionsByFamily(db, stave.familyId),
       getUserProfileByUserId(db, stave.authorId),
@@ -83,6 +84,9 @@ export default async function StaveDetailPage({
       getScribeStats(db, stave.authorId),
       stave.forkedFrom
         ? getStaveAttribution(db, stave.forkedFrom)
+        : Promise.resolve(null),
+      stave.status === "published"
+        ? getAutoThreadForFamily(stave.familyId)
         : Promise.resolve(null),
     ]);
 
@@ -131,6 +135,7 @@ export default async function StaveDetailPage({
         packageFiles={packageFiles}
         forkedFrom={forkedFrom}
         initialSaved={initialSaved}
+        autoThread={autoThread}
       />
     </section>
   );
