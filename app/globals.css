@@ -751,6 +751,34 @@ textarea {
   border-color: var(--hairline-strong);
 }
 
+/* Orchestration grimoires wear the purple edge so the registry feed signals an
+   executable workflow at a glance (matches the orchestration colour used on the
+   detail surface). */
+.stave-card.is-orchestration {
+  border-color: color-mix(in srgb, var(--orchestration) 45%, var(--hairline));
+  background: color-mix(in srgb, var(--orchestration) 4%, var(--surface));
+}
+
+.stave-card.is-orchestration:hover {
+  border-color: color-mix(in srgb, var(--orchestration) 65%, var(--hairline-strong));
+  background: color-mix(in srgb, var(--orchestration) 7%, var(--surface-hover));
+}
+
+/* Compact orchestration symbol chip — replaces the wide "orchestration" text
+   badge in the card title row (the icon carries the meaning and the purple edge
+   reinforces it, so the label is redundant and costs precious title width). */
+.orch-symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--orchestration);
+  background: color-mix(in srgb, var(--orchestration) 14%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--orchestration) 35%, transparent);
+}
+
 .stave-card-top {
   display: flex;
   justify-content: space-between;
@@ -763,11 +791,14 @@ textarea {
   font-weight: 600;
   color: var(--text);
   line-height: 1.3;
-  /* Yield space to the (non-shrinking) type/version tags and break a long
-     single-word title rather than shoving the tags past the card edge. */
+  /* Yield space to the (non-shrinking) type/version tags and clip an over-long
+     title to one line with an ellipsis rather than wrapping or shoving the tags
+     past the card edge. */
   flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .stave-card-title-tags {
