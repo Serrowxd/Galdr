@@ -187,6 +187,36 @@ function resolveBodyPath(
   return rootMd[0] ?? null;
 }
 
+/** Derive a human-readable title from the zip filename or package contents. */
+function deriveTitleFromFiles(paths: string[], zipName?: string): string {
+  if (zipName) {
+    const base = zipName
+      .replace(/\.zip$/i, "")
+      .replace(/[-_]+/g, " ")
+      .trim();
+    if (base) return base.charAt(0).toUpperCase() + base.slice(1);
+  }
+  const rootMd = paths
+    .filter((p) => !p.includes("/") && p.toLowerCase().endsWith(".md"))
+    .sort((a, b) => a.localeCompare(b));
+  if (rootMd[0]) {
+    const base = rootMd[0]
+      .replace(/\.md$/i, "")
+      .replace(/[-_]+/g, " ")
+      .trim();
+    if (base && base.toLowerCase() !== "readme") {
+      return base.charAt(0).toUpperCase() + base.slice(1);
+    }
+  }
+  return "Untitled Stave";
+}
+
+/** Build a minimal stave.yaml with just the required title field. */
+function generateManifest(title: string): string {
+  const safe = title.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return `title: "${safe}"\n`;
+}
+
 /**
  * Validate and parse a stave zip entirely in memory. Caps are enforced in the
  * unzip filter against the central-directory `originalSize` BEFORE decompression,
@@ -197,7 +227,7 @@ function resolveBodyPath(
  * nothing is ever written to disk (file contents are stored as DB text), a symlink
  * entry is just text subject to the same extension allowlist and path checks.
  */
-export function parseStaveZip(data: Uint8Array): UploadResult {
+export function parseStaveZip(data: Uint8Array, options?: { fileName?: string }): UploadResult {
   let raw: Record<string, Uint8Array>;
   try {
     let count = 0;
@@ -277,7 +307,10 @@ export function parseStaveZip(data: Uint8Array): UploadResult {
   const hasYaml = textFiles.has(MANIFEST_YAML);
   const hasJson = textFiles.has(MANIFEST_JSON);
   if (hasYaml && hasJson) return { ok: false, error: "duplicate_manifest" };
-  if (!hasYaml && !hasJson) return { ok: false, error: "missing_manifest" };
+  if (!hasYaml && !hasJson) {
+    const title = deriveTitleFromFiles([...textFiles.keys()], options?.fileName);
+    textFiles.set(MANIFEST_YAML, generateManifest(title));
+  }
 
   const manifestText = textFiles.get(hasYaml ? MANIFEST_YAML : MANIFEST_JSON)!;
   let manifestRaw: unknown;

@@ -77,7 +77,7 @@ export async function POST(request: Request) {
   if (file.size > MAX_UPLOAD_BYTES) return fail("too_large");
 
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const parsed = parseStaveZip(bytes);
+  const parsed = parseStaveZip(bytes, { fileName: file.name });
   if (!parsed.ok) return fail(parsed.error, parsed.details);
 
   try {
