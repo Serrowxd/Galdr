@@ -23,6 +23,7 @@ const navLinks = [
   { href: "/registry", label: "Registry" },
   { href: "/loom", label: "Loom" },
   { href: "/library", label: "Library" },
+  { href: "/tavern", label: "Tavern" },
   { href: "/saga", label: "Saga" },
 ];
 
