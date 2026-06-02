@@ -313,24 +313,27 @@ function LoomEditor() {
   const isLoaded = user !== undefined;
   const isSignedIn = user != null;
 
+  // When the targeted `?id=` changes, clear the previous stave's transient load
+  // artifacts so a stale published-lock / load-error doesn't linger or flash while
+  // the next load runs (same-route SPA nav keeps this component mounted, so they
+  // don't reset on their own). The fork banner is owned by the fetch result below,
+  // so we only clear it when the URL targets nothing. Adjusted during render
+  // (tracking the previous `?id=`) rather than in an effect to avoid a cascading
+  // re-render — same reasoning as flushInto below. Editor content + draftId are
+  // left alone so in-progress work survives navigating to a blank /loom.
+  const [bannerStaveId, setBannerStaveId] = useState(idParam);
+  if (idParam !== bannerStaveId) {
+    setBannerStaveId(idParam);
+    setPublishedLock(null);
+    setLoadError(null);
+    if (!idParam) setForkBanner(null);
+  }
+
   // Hydrate an owned draft from ?id=. Skip the row we just created ourselves
   // (replaceState sets the param but state is already current).
   useEffect(() => {
-    // No stave targeted by the URL: clear any "loaded stave" artifacts so a stale
-    // published-lock / load-error / fork banner from a previously opened stave
-    // doesn't linger after navigating to a blank /loom. Same-route SPA nav keeps
-    // this component mounted, so these don't reset on their own. We deliberately
-    // leave the editor content and draftId alone so in-progress work survives.
-    if (!idParam) {
-      setPublishedLock(null);
-      setLoadError(null);
-      setForkBanner(null);
-      return;
-    }
-    if (idParam === draftId) return;
+    if (!idParam || idParam === draftId) return;
     let cancelled = false;
-    setLoadError(null);
-    setPublishedLock(null);
     (async () => {
       try {
         const res = await fetch(`/api/staves/${idParam}`);

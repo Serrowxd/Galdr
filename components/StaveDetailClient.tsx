@@ -659,7 +659,9 @@ export function StaveDetailClient({
               </li>
               <li>
                 <span>Last published</span>
-                <small>{timeAgo(stats.lastPublishedAt)}</small>
+                {/* Relative time is computed from Date.now(); sub-second drift
+                    between server and client render is expected and harmless. */}
+                <small suppressHydrationWarning>{timeAgo(stats.lastPublishedAt)}</small>
               </li>
             </ul>
           </section>

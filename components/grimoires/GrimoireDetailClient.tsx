@@ -284,7 +284,9 @@ export function GrimoireDetailClient(props: GrimoireDetailProps) {
           </p>
           <div className="stave08-meta">
             <span className="stave08-ver">v{props.version}</span>
-            <span className="stave08-meta-label">updated {timeAgo(updatedAt)}</span>
+            <span className="stave08-meta-label" suppressHydrationWarning>
+              updated {timeAgo(updatedAt)}
+            </span>
             {props.isAuthor ? (
               <span className="tag">{isPublished ? "Published" : "Draft"}</span>
             ) : null}
@@ -674,7 +676,8 @@ export function GrimoireDetailClient(props: GrimoireDetailProps) {
               </li>
               <li>
                 <span>Updated</span>
-                <small>{timeAgo(updatedAt)}</small>
+                {/* Relative time uses Date.now(); server/client drift is harmless. */}
+                <small suppressHydrationWarning>{timeAgo(updatedAt)}</small>
               </li>
             </ul>
           </section>

@@ -71,13 +71,19 @@ export default async function StaveDetailPage({
 
   const status = stave.status === "published" ? "published" : "draft";
 
-  const [versions, author, packageFiles, grimoires, stats] =
+  // Everything below depends only on the already-loaded `stave`, so fetch it all
+  // in one round-trip rather than waterfalling.
+  const [versions, author, packageFiles, grimoires, stats, scribeStats, forkedFrom] =
     await Promise.all([
       getVersionsByFamily(db, stave.familyId),
       getUserProfileByUserId(db, stave.authorId),
       getStaveFiles(db, stave.id),
       listGrimoiresContainingStave(db, stave.familyId),
       getStaveStats(db, stave.familyId),
+      getScribeStats(db, stave.authorId),
+      stave.forkedFrom
+        ? getStaveAttribution(db, stave.forkedFrom)
+        : Promise.resolve(null),
     ]);
 
   // README-first default landing when the package ships a real README.md.
@@ -85,12 +91,6 @@ export default async function StaveDetailPage({
     (f) => f.path.split("/").pop()?.toLowerCase() === "readme.md",
   );
   const initialTab = isTabId(tab) ? tab : defaultTabFor(hasReadme);
-
-  const scribeStats = await getScribeStats(db, stave.authorId);
-
-  const forkedFrom = stave.forkedFrom
-    ? await getStaveAttribution(db, stave.forkedFrom)
-    : null;
 
   const authorName = author?.username ?? "Unknown scribe";
   const sagaHref = author?.username
