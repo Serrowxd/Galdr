@@ -3,26 +3,27 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { StaveDetailClient } from "@/components/StaveDetailClient";
+import { defaultTabFor, isTabId } from "@/lib/staveTabs";
 import { getDbOptional } from "@/db";
-import {
-  getCommentCount,
-  getUserVote,
-  isStaveSaved,
-  getVoteTotals,
-  listCommentsForStave,
-} from "@/lib/staveEngagement";
+import { isStaveSaved } from "@/lib/staveEngagement";
 import { getUserProfileByUserId } from "@/lib/profiles";
+import { listGrimoiresContainingStave } from "@/lib/grimoires";
 import { createClient } from "@/lib/supabase/server";
 import {
+  getScribeStats,
   getStaveAttribution,
   getStaveBySlug,
+  getStaveStats,
   getVersionsByFamily,
 } from "@/lib/staves";
 import { getStaveFiles } from "@/lib/stavePackages";
 
 export const dynamic = "force-dynamic";
 
-type PageProps = { params: Promise<{ slug: string }> };
+type PageProps = {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ tab?: string }>;
+};
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
@@ -46,8 +47,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function StaveDetailPage({ params }: PageProps) {
+export default async function StaveDetailPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { slug } = await params;
+  const { tab } = await searchParams;
 
   const db = getDbOptional();
   if (!db) notFound();
@@ -61,73 +66,71 @@ export default async function StaveDetailPage({ params }: PageProps) {
   } = await supabase.auth.getUser();
   const isAuthor = user?.id === stave.authorId;
 
-  // Drafts and private (unlisted) staves are owner-only — hide their
-  // existence from everyone else.
+  // Drafts and private (unlisted) staves are owner-only.
   if ((stave.status === "draft" || stave.private) && !isAuthor) notFound();
 
   const status = stave.status === "published" ? "published" : "draft";
 
-  const [versions, author, packageFiles] = await Promise.all([
-    getVersionsByFamily(db, stave.familyId),
-    getUserProfileByUserId(db, stave.authorId),
-    getStaveFiles(db, stave.id),
-  ]);
+  // Everything below depends only on the already-loaded `stave`, so fetch it all
+  // in one round-trip rather than waterfalling.
+  const [versions, author, packageFiles, grimoires, stats, scribeStats, forkedFrom] =
+    await Promise.all([
+      getVersionsByFamily(db, stave.familyId),
+      getUserProfileByUserId(db, stave.authorId),
+      getStaveFiles(db, stave.id),
+      listGrimoiresContainingStave(db, stave.familyId),
+      getStaveStats(db, stave.familyId),
+      getScribeStats(db, stave.authorId),
+      stave.forkedFrom
+        ? getStaveAttribution(db, stave.forkedFrom)
+        : Promise.resolve(null),
+    ]);
 
-  const forkedFrom = stave.forkedFrom
-    ? await getStaveAttribution(db, stave.forkedFrom)
-    : null;
+  // README-first default landing when the package ships a real README.md.
+  const hasReadme = packageFiles.some(
+    (f) => f.path.split("/").pop()?.toLowerCase() === "readme.md",
+  );
+  const initialTab = isTabId(tab) ? tab : defaultTabFor(hasReadme);
 
   const authorName = author?.username ?? "Unknown scribe";
   const sagaHref = author?.username
     ? `/saga/${author.username.toLowerCase()}`
     : "/";
 
-  const votes = await getVoteTotals(db, stave.id);
-  const cCount = await getCommentCount(db, stave.id);
-  const initialTotals = {
-    upvotes: votes.upvotes,
-    downvotes: votes.downvotes,
-    commentsCount: cCount,
-  };
-
-  let initialUserVote: 1 | -1 | 0 = 0;
   let initialSaved = false;
   if (user) {
-    initialUserVote = await getUserVote(db, stave.id, user.id);
     initialSaved = await isStaveSaved(db, stave.id, user.id);
   }
 
-  const rows = await listCommentsForStave(db, stave.id);
-  const initialComments = rows.map((r) => ({
-    id: r.id,
-    authorLabel: r.authorLabel,
-    body: r.body,
-    createdAt: r.createdAt.toISOString(),
-  }));
-
   return (
-    <section className="container">
+    <section className="container stave-detail-page">
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <Link href="/">Registry</Link>
+        <Link href="/registry">Registry</Link>
         <span className="breadcrumb-sep" aria-hidden>
           /
         </span>
-        <span>{stave.title}</span>
+        <Link href={sagaHref}>{authorName}</Link>
+        <span className="breadcrumb-sep" aria-hidden>
+          /
+        </span>
+        <span>{stave.slug}</span>
       </nav>
 
       <StaveDetailClient
         stave={stave}
         authorName={authorName}
+        authorAvatarUrl={author?.avatarUrl ?? null}
         sagaHref={sagaHref}
+        scribeStats={scribeStats}
         isAuthor={isAuthor}
         status={status}
+        initialTab={initialTab}
         versions={versions}
-        forkedFrom={forkedFrom}
+        grimoires={grimoires}
+        stats={stats}
         packageFiles={packageFiles}
-        initialTotals={initialTotals}
-        initialUserVote={initialUserVote}
+        forkedFrom={forkedFrom}
         initialSaved={initialSaved}
-        initialComments={initialComments}
       />
     </section>
   );

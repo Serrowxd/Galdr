@@ -7,12 +7,18 @@ import {
   type GrimoireDetailProps,
 } from "@/components/grimoires/GrimoireDetailClient";
 import type { EntryDTO } from "@/components/grimoires/GrimoireEntryRow";
+import {
+  GRIMOIRE_TABS,
+  defaultGrimoireTab,
+  type GrimoireTabId,
+} from "@/lib/grimoireTabs";
 import { getDbOptional } from "@/db";
 import {
   getGrimoireBySlug,
   getGrimoireForkCount,
   getGrimoireVoteTotals,
   getUserGrimoireVote,
+  getVersionsByFamily,
   incrementGrimoireViews,
   isGrimoireSaved,
   ORCHESTRATION_TAG,
@@ -23,7 +29,36 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-type PageProps = { params: Promise<{ slug: string }> };
+/**
+ * Synthesises a starter `orchestration.md` from the resolved entries. Stand-in
+ * until grimoires gain a real file store; keeps the orchestration file truthful
+ * (it mirrors the actual run order) without inventing content.
+ */
+function buildOrchestrationDoc(title: string, entries: EntryDTO[]): string {
+  const steps = entries
+    .map((e, i) => {
+      const name = e.stave?.title ?? "Unavailable stave";
+      const optional = e.isOptional ? " _(optional)_" : "";
+      const note = e.annotation ? ` — ${e.annotation}` : "";
+      return `${i + 1}. **${name}**${optional}${note}`;
+    })
+    .join("\n");
+
+  return [
+    `# ${title} — Orchestration`,
+    "",
+    "These staves run as a coordinated workflow. They execute in the order below; optional steps may be skipped before download or run.",
+    "",
+    steps || "_No staves yet._",
+    "",
+    "> Generated starting point. A future release will let curators author the orchestration graph directly.",
+  ].join("\n");
+}
+
+type PageProps = {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ tab?: string }>;
+};
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
@@ -44,8 +79,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function GrimoireDetailPage({ params }: PageProps) {
+export default async function GrimoireDetailPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
+  const { tab } = await searchParams;
 
   const db = getDbOptional();
   if (!db) notFound();
@@ -62,10 +98,11 @@ export default async function GrimoireDetailPage({ params }: PageProps) {
   // Drafts are owner-only.
   if (grimoire.status === "draft" && !isAuthor) notFound();
 
-  const [resolved, author, forkCount] = await Promise.all([
+  const [resolved, author, forkCount, versions] = await Promise.all([
     resolveGrimoireEntries(db, grimoire.id),
     getUserProfileByUserId(db, grimoire.authorId),
     getGrimoireForkCount(db, grimoire.familyId),
+    getVersionsByFamily(db, grimoire.familyId),
   ]);
 
   // Best-effort view bump for published grimoires.
@@ -116,27 +153,61 @@ export default async function GrimoireDetailPage({ params }: PageProps) {
     initialSaved = await isGrimoireSaved(db, grimoire.id, user.id);
   }
 
+  const authorName = author?.username ?? "Unknown scribe";
+  const sagaHref = author?.username ? `/saga/${author.username.toLowerCase()}` : "/";
+
+  const isOrchestration = grimoire.tags.includes(ORCHESTRATION_TAG);
+  // The grimoire's `details` markdown is its README — the human entry point we
+  // land on by default when present, mirroring a stave's packaged README.md.
+  const readme = grimoire.details && grimoire.details.trim() ? grimoire.details : null;
+  const hasReadme = readme != null;
+
+  // Orchestration document. There's no grimoire file store yet, so we synthesise
+  // a run-order starting point from the resolved entries; a future release will
+  // let curators author the orchestration graph directly (then this reads from
+  // the stored orchestration.md instead).
+  const orchestrationDoc = isOrchestration
+    ? buildOrchestrationDoc(grimoire.title, entries)
+    : null;
+
+  // README-first default landing; honour a valid `?tab=` deep-link otherwise.
+  const requested = tab as GrimoireTabId | undefined;
+  const isValidTab =
+    requested != null &&
+    GRIMOIRE_TABS.includes(requested) &&
+    !(requested === "readme" && !hasReadme) &&
+    !(requested === "orchestration" && !isOrchestration);
+  const initialTab: GrimoireTabId = isValidTab
+    ? requested
+    : defaultGrimoireTab(hasReadme);
+
   const detailProps: GrimoireDetailProps = {
     id: grimoire.id,
     slug: grimoire.slug,
     title: grimoire.title,
     shortDescription: grimoire.shortDescription,
-    details: grimoire.details,
+    readme,
+    orchestrationDoc,
     tags: grimoire.tags,
     license: grimoire.license,
     version: grimoire.version,
-    isOrchestration: grimoire.tags.includes(ORCHESTRATION_TAG),
-    authorName: author?.username ?? "Unknown scribe",
-    sagaHref: author?.username ? `/saga/${author.username.toLowerCase()}` : "/",
+    isOrchestration,
+    authorName,
+    authorAvatarUrl: author?.avatarUrl ?? null,
+    sagaHref,
     isAuthor,
     isSignedIn: Boolean(user),
     status: grimoire.status === "published" ? "published" : "draft",
+    initialTab,
     entries,
+    versions,
     sourcesCount,
     forkCount,
     downloadsCount: grimoire.downloadsCount,
-    lastUpdated: grimoire.updatedAt
-      ? new Date(grimoire.updatedAt).toLocaleDateString()
+    createdAt: grimoire.createdAt ? new Date(grimoire.createdAt).toISOString() : null,
+    updatedAt: grimoire.updatedAt ? new Date(grimoire.updatedAt).toISOString() : null,
+    publishedAt: grimoire.publishedAt
+      ? new Date(grimoire.publishedAt).toISOString()
       : null,
     initialUpvotes: totals.upvotes,
     initialDownvotes: totals.downvotes,
@@ -145,13 +216,17 @@ export default async function GrimoireDetailPage({ params }: PageProps) {
   };
 
   return (
-    <section className="container">
+    <section className="container stave-detail-page">
       <nav className="breadcrumb" aria-label="Breadcrumb">
         <Link href="/registry">Registry</Link>
         <span className="breadcrumb-sep" aria-hidden>
           /
         </span>
-        <span>{grimoire.title}</span>
+        <Link href={sagaHref}>{authorName}</Link>
+        <span className="breadcrumb-sep" aria-hidden>
+          /
+        </span>
+        <span>{grimoire.slug}</span>
       </nav>
 
       <GrimoireDetailClient {...detailProps} />

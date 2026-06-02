@@ -17,8 +17,19 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Pin, Search, Trash2 } from "lucide-react";
+import {
+  Boxes,
+  FileText,
+  GripVertical,
+  Lock,
+  Pin,
+  Plus,
+  Search,
+  Trash2,
+  Workflow,
+} from "lucide-react";
 
+import { renderMarkdownPreview } from "@/lib/markdownPreview";
 import { ALLOWED_LICENSES } from "@/lib/staveValidation";
 
 export type EditorEntry = {
@@ -47,6 +58,12 @@ const ORCHESTRATION_TAG = "orchestration";
 const DEBOUNCE_MS = 250;
 const MAX_TAGS = 10;
 const MAX_TAG_LEN = 32;
+
+// Tree node sentinels for the file-hierarchy editor.
+const README_NODE = "README.md";
+const ORCH_NODE = "orchestration.md";
+const STAVES_NODE = "STAVES";
+type EditorNode = typeof README_NODE | typeof ORCH_NODE | typeof STAVES_NODE;
 
 type StaveSearchResult = {
   id: string;
@@ -166,12 +183,20 @@ export function GrimoireEditorClient(props: GrimoireEditorProps) {
   const [tagsInput, setTagsInput] = useState(
     props.initialTags.filter((t) => t !== ORCHESTRATION_TAG).join(", "),
   );
+  // The orchestration document is not yet persisted (no grimoire file store);
+  // this is the authoring surface mock-up. Adding the file flips orchestration
+  // mode on (a persisted tag); the body lives in client state for now.
+  const [orchestrationContent, setOrchestrationContent] = useState("");
 
   const composeTags = (raw: string, orch: boolean) => {
     const base = parseTags(raw).filter((t) => t !== ORCHESTRATION_TAG);
     return orch ? [...base, ORCHESTRATION_TAG] : base;
   };
   const [entries, setEntries] = useState<EditorEntry[]>(props.initialEntries);
+
+  // Which file/folder is open in the inspector + README edit/preview toggle.
+  const [node, setNode] = useState<EditorNode>(STAVES_NODE);
+  const [readmeView, setReadmeView] = useState<"edit" | "preview">("edit");
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<StaveSearchResult[]>([]);
@@ -206,6 +231,18 @@ export function GrimoireEditorClient(props: GrimoireEditorProps) {
     },
     [props.id],
   );
+
+  const addOrchestrationFile = () => {
+    setIsOrchestration(true);
+    setNode(ORCH_NODE);
+    saveHeader({ tags: composeTags(tagsInput, true) });
+  };
+
+  const removeOrchestrationFile = () => {
+    setIsOrchestration(false);
+    if (node === ORCH_NODE) setNode(STAVES_NODE);
+    saveHeader({ tags: composeTags(tagsInput, false) });
+  };
 
   // --- Stave search ----------------------------------------------------------
   useEffect(() => {
@@ -352,7 +389,8 @@ export function GrimoireEditorClient(props: GrimoireEditorProps) {
   };
 
   return (
-    <div className="stack" style={{ gap: 20 }}>
+    <div className="stack" style={{ gap: 18 }}>
+      {/* Title + save state */}
       <div className="loom-toolbar">
         <input
           className="input loom-title-input"
@@ -369,6 +407,7 @@ export function GrimoireEditorClient(props: GrimoireEditorProps) {
         </span>
       </div>
 
+      {/* Metadata strip — grimoire-level fields that aren't files. */}
       <textarea
         className="textarea"
         rows={2}
@@ -380,7 +419,6 @@ export function GrimoireEditorClient(props: GrimoireEditorProps) {
           saveHeader({ short_description: e.target.value });
         }}
       />
-
       <div className="toolbar-row">
         <select
           className="select"
@@ -398,125 +436,238 @@ export function GrimoireEditorClient(props: GrimoireEditorProps) {
             </option>
           ))}
         </select>
-        <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
-          <input
-            type="checkbox"
-            checked={isOrchestration}
-            onChange={(e) => {
-              setIsOrchestration(e.target.checked);
-              saveHeader({ tags: composeTags(tagsInput, e.target.checked) });
-            }}
-          />
-          Orchestration mode (staves can run in parallel)
-        </label>
-      </div>
-
-      <div className="field" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <label className="label-tiny" htmlFor="grimoire-tags">
-          Tags (comma-separated, ≤10)
-        </label>
         <input
-          id="grimoire-tags"
           className="input"
-          placeholder="code-review, security, workflow"
+          style={{ flex: 1, minWidth: 220 }}
+          placeholder="Tags (comma-separated, ≤10)"
           value={tagsInput}
           onChange={(e) => {
             setTagsInput(e.target.value);
             saveHeader({ tags: composeTags(e.target.value, isOrchestration) });
           }}
+          aria-label="Tags"
         />
       </div>
 
-      <section className="stack-sm">
-        <div className="section-head">
-          <h2>Staves</h2>
-          <span className="muted">{entries.length} / 50</span>
-        </div>
-
-        {entries.length === 0 ? (
-          <p className="muted">Search below to add staves to this grimoire.</p>
-        ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext
-              items={entries.map((e) => e.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <ul className="grimoire-editor-list">
-                {entries.map((entry, i) => (
-                  <SortableEntry
-                    key={entry.id}
-                    entry={entry}
-                    position={i + 1}
-                    onToggleOptional={toggleOptional}
-                    onAnnotation={setAnnotation}
-                    onRemove={removeEntry}
-                  />
-                ))}
-              </ul>
-            </SortableContext>
-          </DndContext>
-        )}
-
-        <div className="search-bar" role="search">
-          <Search size={16} aria-hidden />
-          <input
-            type="search"
-            placeholder="Search published staves to add…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search staves"
-          />
-        </div>
-        {searching ? <p className="muted" style={{ fontSize: 12 }}>Searching…</p> : null}
-        {results.length > 0 ? (
-          <ul className="grimoire-search-results">
-            {results.map((r) => {
-              const already = entries.some((e) => e.staveFamilyId === r.familyId);
-              return (
-                <li key={r.id} className="grimoire-search-row">
-                  <div className="grimoire-search-row-info">
-                    <span className="grimoire-search-row-title">
-                      {r.title}
-                      <span className="tag" style={{ marginLeft: 6 }}>
-                        v{r.version}
-                      </span>
-                    </span>
-                    {r.description ? (
-                      <span className="muted" style={{ fontSize: 12 }}>
-                        {r.description}
-                      </span>
-                    ) : null}
-                  </div>
+      {/* File-hierarchy inspector — mirrors the public grimoire page. */}
+      <section className="stave-inspector" aria-label="Grimoire contents">
+        <div className="stave-inspector-grid">
+          <aside className="stave-tree-panel" aria-label="File tree">
+            <ul className="stave-tree-list">
+              <li>
+                <button
+                  type="button"
+                  className={`stave-tree-row stave-tree-file ${node === README_NODE ? "is-active" : ""}`}
+                  onClick={() => setNode(README_NODE)}
+                >
+                  <FileText size={13} aria-hidden />
+                  <span>README.md</span>
+                </button>
+              </li>
+              {isOrchestration ? (
+                <li>
                   <button
                     type="button"
-                    className="btn btn-soft btn-sm"
-                    onClick={() => addStave(r)}
-                    disabled={pending || already}
+                    className={`stave-tree-row stave-tree-file is-orchestration ${node === ORCH_NODE ? "is-active" : ""}`}
+                    onClick={() => setNode(ORCH_NODE)}
                   >
-                    {already ? "Added" : "+ Add"}
+                    <Workflow size={13} aria-hidden />
+                    <span>orchestration.md</span>
                   </button>
                 </li>
-              );
-            })}
-          </ul>
-        ) : null}
-      </section>
+              ) : null}
+              <li>
+                <button
+                  type="button"
+                  className={`stave-tree-row stave-tree-folder is-selectable ${node === STAVES_NODE ? "is-active" : ""}`}
+                  onClick={() => setNode(STAVES_NODE)}
+                  title="The staves in this grimoire — this folder is fixed"
+                >
+                  <Boxes size={13} aria-hidden />
+                  <span>STAVES</span>
+                  <span className="tag" style={{ marginLeft: 4 }}>
+                    {entries.length}
+                  </span>
+                  <Lock size={11} className="stave-tree-lock" aria-hidden />
+                </button>
+              </li>
+            </ul>
 
-      <section className="stack-sm">
-        <div className="section-head">
-          <h2>Author notes</h2>
+            {!isOrchestration ? (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm btn-block"
+                style={{ marginTop: 8 }}
+                onClick={addOrchestrationFile}
+              >
+                <Plus size={13} /> Orchestration file
+              </button>
+            ) : null}
+          </aside>
+
+          <div className="stave-markdown-panel">
+            {/* STAVES — the vertical stave editor (search + sortable list). */}
+            {node === STAVES_NODE ? (
+              <div style={{ padding: 16 }}>
+                <div className="section-head">
+                  <h2>Staves</h2>
+                  <span className="muted">{entries.length} / 50</span>
+                </div>
+
+                {entries.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>
+                    Search below to add staves to this grimoire.
+                  </p>
+                ) : (
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                    <SortableContext
+                      items={entries.map((e) => e.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <ul className="grimoire-editor-list">
+                        {entries.map((entry, i) => (
+                          <SortableEntry
+                            key={entry.id}
+                            entry={entry}
+                            position={i + 1}
+                            onToggleOptional={toggleOptional}
+                            onAnnotation={setAnnotation}
+                            onRemove={removeEntry}
+                          />
+                        ))}
+                      </ul>
+                    </SortableContext>
+                  </DndContext>
+                )}
+
+                <div className="search-bar" role="search" style={{ marginTop: 12 }}>
+                  <Search size={16} aria-hidden />
+                  <input
+                    type="search"
+                    placeholder="Search published staves to add…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    aria-label="Search staves"
+                  />
+                </div>
+                {searching ? (
+                  <p className="muted" style={{ fontSize: 12 }}>
+                    Searching…
+                  </p>
+                ) : null}
+                {results.length > 0 ? (
+                  <ul className="grimoire-search-results">
+                    {results.map((r) => {
+                      const already = entries.some((e) => e.staveFamilyId === r.familyId);
+                      return (
+                        <li key={r.id} className="grimoire-search-row">
+                          <div className="grimoire-search-row-info">
+                            <span className="grimoire-search-row-title">
+                              {r.title}
+                              <span className="tag" style={{ marginLeft: 6 }}>
+                                v{r.version}
+                              </span>
+                            </span>
+                            {r.description ? (
+                              <span className="muted" style={{ fontSize: 12 }}>
+                                {r.description}
+                              </span>
+                            ) : null}
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-soft btn-sm"
+                            onClick={() => addStave(r)}
+                            disabled={pending || already}
+                          >
+                            {already ? "Added" : "+ Add"}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* README.md — author notes / overview, the grimoire's entry point. */}
+            {node === README_NODE ? (
+              <>
+                <div className="stave-md-tabs" role="tablist">
+                  <span className="stave-inspector-path" style={{ marginRight: "auto" }}>
+                    README.md
+                  </span>
+                  <button
+                    type="button"
+                    role="tab"
+                    className={`stave-md-tab ${readmeView === "edit" ? "is-active" : ""}`}
+                    onClick={() => setReadmeView("edit")}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    className={`stave-md-tab ${readmeView === "preview" ? "is-active" : ""}`}
+                    onClick={() => setReadmeView("preview")}
+                  >
+                    Preview
+                  </button>
+                </div>
+                {readmeView === "edit" ? (
+                  <textarea
+                    className="stave-md-raw"
+                    maxLength={20000}
+                    placeholder="# Overview&#10;&#10;Long-form notes / README (markdown, ≤20000 chars). This is the landing tab on the public page."
+                    value={details}
+                    onChange={(e) => {
+                      setDetails(e.target.value);
+                      saveHeader({ details: e.target.value });
+                    }}
+                    aria-label="README markdown"
+                  />
+                ) : details.trim() ? (
+                  <article className="loom-preview stave-md-preview">
+                    {renderMarkdownPreview(details)}
+                  </article>
+                ) : (
+                  <p className="stave08-empty" style={{ padding: 18 }}>
+                    Nothing to preview yet — switch to Edit and write your README.
+                  </p>
+                )}
+              </>
+            ) : null}
+
+            {/* orchestration.md — authoring surface mock (not yet persisted). */}
+            {node === ORCH_NODE ? (
+              <>
+                <div className="stave-md-tabs" role="tablist">
+                  <span className="stave-inspector-path" style={{ marginRight: "auto" }}>
+                    orchestration.md
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={removeOrchestrationFile}
+                  >
+                    <Trash2 size={12} /> Remove
+                  </button>
+                </div>
+                <textarea
+                  className="stave-md-raw"
+                  placeholder="# Orchestration&#10;&#10;Describe how these staves coordinate — run order, hand-offs, parallel groups. (Authoring is a preview; richer orchestration tooling is coming.)"
+                  value={orchestrationContent}
+                  onChange={(e) => setOrchestrationContent(e.target.value)}
+                  aria-label="Orchestration markdown"
+                />
+                <p className="muted" style={{ fontSize: 11.5, padding: "8px 12px" }}>
+                  Orchestration authoring is a preview — content isn&apos;t persisted yet,
+                  but the file marks this grimoire as an orchestration.
+                </p>
+              </>
+            ) : null}
+          </div>
         </div>
-        <textarea
-          className="textarea"
-          rows={8}
-          maxLength={20000}
-          placeholder="Long-form notes / README (markdown, ≤20000 chars)"
-          value={details}
-          onChange={(e) => {
-            setDetails(e.target.value);
-            saveHeader({ details: e.target.value });
-          }}
-        />
       </section>
 
       {error ? (

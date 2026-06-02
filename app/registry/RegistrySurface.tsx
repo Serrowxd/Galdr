@@ -48,6 +48,7 @@ type RegistrySurfaceProps = {
   startRank: number;
   prevHref: string | null;
   nextHref: string | null;
+  staveFilter?: { slug: string; title: string } | null;
 };
 
 function SaveButton({ item }: { item: RegistryFeedItem }) {
@@ -169,6 +170,7 @@ export function RegistrySurface({
   startRank,
   prevHref,
   nextHref,
+  staveFilter,
 }: RegistrySurfaceProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -176,7 +178,9 @@ export function RegistrySurface({
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
 
   const sort = searchParams.get("sort") === "new" ? "new" : "top";
-  const type = searchParams.get("type") ?? "all";
+  // A stave filter is inherently a grimoires-only view (a stave can't contain a
+  // stave), so reflect that in the type toggle even though `?type` isn't set.
+  const type = staveFilter ? "grimoire" : searchParams.get("type") ?? "all";
   const activeTag = searchParams.get("tag") ?? "all";
 
   const update = (next: Record<string, string | null>) => {
@@ -319,6 +323,21 @@ export function RegistrySurface({
         </aside>
 
         <div className="reg-b-feed">
+          {staveFilter ? (
+            <div className="reg-b-stave-filter">
+              <span>
+                Grimoires containing <strong>{staveFilter.title}</strong>
+              </span>
+              <button
+                type="button"
+                className="chip"
+                onClick={() => update({ stave: null, type: null })}
+              >
+                Clear ×
+              </button>
+            </div>
+          ) : null}
+
           <div className="reg-b-feed-header">
             Showing <strong>{total.toLocaleString()}</strong> {typeLabel} — sorted
             by {sort === "new" ? "newest" : "monthly score"}

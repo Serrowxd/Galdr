@@ -53,6 +53,8 @@ export type ListGrimoiresOpts = {
   sort?: "top" | "new";
   limit?: number;
   offset?: number;
+  /** Only grimoires whose entry list contains a stave from this family. */
+  containsStaveFamily?: string;
 };
 
 export type ListGrimoiresResult = {
@@ -959,6 +961,37 @@ export async function getStaveFilesFor(
     .where(eq(staveFiles.staveId, staveId));
 }
 
+/**
+ * Published grimoires whose entry list contains a stave from this family
+ * (spec 08 "Found in grimoires" panel). `staveCount` is the grimoire's total
+ * entry count, shown as a chip.
+ */
+export async function listGrimoiresContainingStave(
+  db: GaldrDb,
+  staveFamilyId: string,
+): Promise<Array<{ slug: string; title: string; staveCount: number }>> {
+  const result = await db.execute(sql`
+    SELECT g.slug, g.title,
+           (SELECT COUNT(*) FROM grimoire_entries e2 WHERE e2.grimoire_id = g.id) AS stave_count
+    FROM grimoires g
+    JOIN grimoire_entries ge
+      ON ge.grimoire_id = g.id AND ge.stave_family_id = ${staveFamilyId}
+    WHERE g.status = 'published' AND g.deleted_at IS NULL
+    GROUP BY g.id, g.slug, g.title
+    ORDER BY g.title
+  `);
+  const rows = result as unknown as {
+    slug: string;
+    title: string;
+    stave_count: number | string;
+  }[];
+  return rows.map((r) => ({
+    slug: r.slug,
+    title: r.title,
+    staveCount: Number(r.stave_count),
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Aggregate listing (mirrors lib/staves.ts listStaves — see spec 04 / 07)
 // ---------------------------------------------------------------------------
@@ -1043,6 +1076,11 @@ export async function listGrimoires(
     where.push(sql`(g.title ILIKE ${pattern} OR g.short_description ILIKE ${pattern})`);
   }
   if (opts.tag) where.push(sql`${opts.tag} = ANY(g.tags)`);
+  if (opts.containsStaveFamily) {
+    where.push(
+      sql`EXISTS (SELECT 1 FROM grimoire_entries ge WHERE ge.grimoire_id = g.id AND ge.stave_family_id = ${opts.containsStaveFamily})`,
+    );
+  }
   const whereSql = sql.join(where, sql` AND `);
 
   const orderSql =

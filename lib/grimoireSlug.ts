@@ -1,9 +1,11 @@
-import { like, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { GaldrDb } from "@/db";
 import { grimoires } from "@/db/schema";
 
 const MAX_SLUG_LEN = 80;
+// Reserve room for the "-<token>" disambiguator appended to every published slug.
+const TOKEN_LENGTHS = [6, 8, 12, 32] as const;
 
 export function slugifyGrimoireTitle(title: string): string {
   return (
@@ -21,25 +23,39 @@ export function slugifyGrimoireTitle(title: string): string {
 }
 
 /**
- * Returns a slug not held by any grimoire. Soft-deleted slugs stay reserved (the
- * `slug` unique constraint spans all rows), so we check every row to keep old
- * links from resolving to different content. Mirrors lib/staveSlug.ts.
+ * Builds a shaped slug: the title stem plus a short, stable disambiguator
+ * derived from the grimoire's own id — e.g. `agentic-review-3142d9`. Mirrors
+ * lib/staveSlug.ts so staves and grimoires share one naming pattern.
+ *
+ * Why a token instead of a numeric suffix: a global `slug` namespace with `-2`,
+ * `-3` dedup is a land-grab (first publisher gets the clean name, everyone else
+ * looks second-class) and the suffix is meaningless. A token off the immutable
+ * row id is unique by construction, carries no ranking, and never breaks when a
+ * username changes. Soft-deleted slugs stay reserved (the unique constraint
+ * spans all rows), so we still probe the table.
+ *
+ * `seedId` is the grimoire row's uuid — stable for the life of the row, so the
+ * slug is deterministic. We widen the token only on the astronomically-rare
+ * prefix collision.
  */
 export async function generateUniqueGrimoireSlug(
   db: GaldrDb,
   base: string,
+  seedId: string,
 ): Promise<string> {
-  const trimmedBase = base.slice(0, MAX_SLUG_LEN - 6) || "untitled-grimoire";
+  // Leave room for the longest token + separator.
+  const stem = base.slice(0, MAX_SLUG_LEN - 33) || "untitled-grimoire";
+  const hex = seedId.replace(/-/g, "").toLowerCase();
 
-  const rows = await db
-    .select({ slug: grimoires.slug })
-    .from(grimoires)
-    .where(like(grimoires.slug, sql`${trimmedBase + "%"}`));
-  const taken = new Set(rows.map((r) => r.slug));
-
-  if (!taken.has(trimmedBase)) return trimmedBase;
-  for (let n = 2; ; n++) {
-    const candidate = `${trimmedBase}-${n}`;
-    if (!taken.has(candidate)) return candidate;
+  for (const len of TOKEN_LENGTHS) {
+    const candidate = `${stem}-${hex.slice(0, len)}`;
+    const [row] = await db
+      .select({ slug: grimoires.slug })
+      .from(grimoires)
+      .where(eq(grimoires.slug, candidate))
+      .limit(1);
+    if (!row) return candidate;
   }
+  // Full id can only collide with itself (republish of the same row) — safe.
+  return `${stem}-${hex}`;
 }

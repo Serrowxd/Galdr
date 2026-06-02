@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUp, Bookmark, Download } from "lucide-react";
+import { ArrowUp, Bookmark, Download, Workflow } from "lucide-react";
 
 export type GrimoireCardData = {
   slug: string;
@@ -26,12 +26,21 @@ export function GrimoireCard({ grimoire }: { grimoire: GrimoireCardData }) {
   const score = (grimoire.upvotes ?? 0) - (grimoire.downvotes ?? 0);
 
   return (
-    <Link href={`/grimoires/${grimoire.slug}`} className="stave-card">
+    <Link
+      href={`/grimoires/${grimoire.slug}`}
+      className={`stave-card${isOrchestration ? " is-orchestration" : ""}`}
+    >
       <div className="stave-card-top">
         <div className="stave-card-title">{grimoire.title}</div>
         <div className="stave-card-title-tags">
           {isOrchestration ? (
-            <span className="tag orchestration">orchestration</span>
+            <span
+              className="orch-symbol"
+              title="Orchestration"
+              aria-label="Orchestration"
+            >
+              <Workflow size={13} aria-hidden />
+            </span>
           ) : null}
           <span className="tag grimoire-type">Grimoire</span>
         </div>

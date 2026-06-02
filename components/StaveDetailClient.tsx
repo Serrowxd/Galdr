@@ -6,12 +6,11 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   Bookmark,
   BookMarked,
-  ChevronRight,
   Download,
+  FileText,
+  Folder,
   GitFork,
-  MessageCircle,
-  ThumbsDown,
-  ThumbsUp,
+  X,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -19,55 +18,114 @@ import { AddToGrimoireDialog } from "@/components/grimoires/AddToGrimoireDialog"
 import { GaldrSignInButton } from "@/components/GaldrSignInButton";
 import { renderMarkdownPreview } from "@/lib/markdownPreview";
 import { buildTree, type TreeNode } from "@/lib/packageTree";
-import type { Stave, StaveVersion, ForkAttribution } from "@/lib/staves";
+import { defaultTabFor, type TabId } from "@/lib/staveTabs";
+import type {
+  ForkAttribution,
+  Stave,
+  StaveStats,
+  StaveVersion,
+} from "@/lib/staves";
 import type { StavePackageFile } from "@/lib/stavePackages";
 
-export type StaveCommentDTO = {
-  id: string;
-  authorLabel: string;
-  body: string;
-  createdAt: string;
+type GrimoireRef = { slug: string; title: string; staveCount: number };
+
+type StaveDetailClientProps = {
+  stave: Stave;
+  authorName: string;
+  authorAvatarUrl: string | null;
+  sagaHref: string;
+  scribeStats: { staveCount: number; saves: number };
+  isAuthor: boolean;
+  status: "draft" | "published";
+  initialTab: TabId;
+  versions: StaveVersion[];
+  grimoires: GrimoireRef[];
+  stats: StaveStats;
+  packageFiles: StavePackageFile[];
+  forkedFrom: ForkAttribution | null;
+  initialSaved: boolean;
 };
 
-function TreeList({
+// --- small formatters -------------------------------------------------------
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const kb = n / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb < 10 ? 1 : 0)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+function byteLength(s: string): number {
+  return new TextEncoder().encode(s).length;
+}
+
+function timeAgo(date: Date | string | null): string {
+  if (!date) return "—";
+  const d = typeof date === "string" ? new Date(date) : date;
+  const secs = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
+}
+
+// --- Files tab tree ---------------------------------------------------------
+
+function FileTree({
   nodes,
-  depth,
-  selectedPath,
-  onSelect,
+  sizes,
+  entrypoint,
+  active,
+  onOpen,
 }: {
   nodes: TreeNode[];
-  depth: number;
-  selectedPath: string;
-  onSelect: (path: string) => void;
+  sizes: Map<string, number>;
+  entrypoint: string;
+  active: string;
+  onOpen: (path: string) => void;
 }) {
   return (
     <ul className="stave-tree-list">
       {nodes.map((node) => {
         if (node.kind === "dir") {
           return (
-            <li key={`${depth}-${node.name}`}>
+            <li key={`dir-${node.path}`}>
               <div className="stave-tree-row stave-tree-folder">
-                <ChevronRight size={12} aria-hidden />
+                <Folder size={13} aria-hidden />
                 <span>{node.name}</span>
               </div>
-              <TreeList
+              <FileTree
                 nodes={node.nodes}
-                depth={depth + 1}
-                selectedPath={selectedPath}
-                onSelect={onSelect}
+                sizes={sizes}
+                entrypoint={entrypoint}
+                active={active}
+                onOpen={onOpen}
               />
             </li>
           );
         }
-        const active = node.path === selectedPath;
+        const isEntry = node.path === entrypoint;
         return (
           <li key={node.path}>
             <button
               type="button"
-              className={`stave-tree-row stave-tree-file ${active ? "is-active" : ""}`}
-              onClick={() => onSelect(node.path)}
+              className={`stave-tree-row stave-tree-file ${node.path === active ? "is-active" : ""}`}
+              onClick={() => onOpen(node.path)}
             >
-              {node.name}
+              <FileText size={13} aria-hidden />
+              <span>{node.name}</span>
+              {isEntry ? (
+                <span className="stave08-ep-badge">entrypoint</span>
+              ) : null}
+              <span className="stave08-file-size">
+                {formatBytes(sizes.get(node.path) ?? 0)}
+              </span>
             </button>
           </li>
         );
@@ -76,40 +134,24 @@ function TreeList({
   );
 }
 
-type StaveDetailClientProps = {
-  stave: Stave;
-  authorName: string;
-  sagaHref: string;
-  isAuthor: boolean;
-  status: "draft" | "published";
-  versions: StaveVersion[];
-  forkedFrom: ForkAttribution | null;
-  packageFiles: StavePackageFile[];
-  initialTotals: {
-    upvotes: number;
-    downvotes: number;
-    commentsCount: number;
-  };
-  initialUserVote: 1 | -1 | 0;
-  initialSaved: boolean;
-  initialComments: StaveCommentDTO[];
-};
-
 export function StaveDetailClient({
   stave,
   authorName,
+  authorAvatarUrl,
   sagaHref,
+  scribeStats,
   isAuthor,
   status,
+  initialTab,
   versions,
-  forkedFrom,
+  grimoires,
+  stats,
   packageFiles,
-  initialTotals,
-  initialUserVote,
+  forkedFrom,
   initialSaved,
-  initialComments,
 }: StaveDetailClientProps) {
   const router = useRouter();
+
   const [user, setUser] = useState<{ id: string } | null | undefined>(undefined);
   useEffect(() => {
     const supabase = createClient();
@@ -122,12 +164,12 @@ export function StaveDetailClient({
     return () => subscription.unsubscribe();
   }, []);
   const isLoaded = user !== undefined;
-  const isSignedIn = user !== null && user !== undefined;
+  const isSignedIn = isLoaded && user !== null;
 
-  // Loom-authored staves carry their text in `stave.body` and have no package
-  // files. Fall back to a synthetic file so the inspector renders the body
-  // instead of an empty "No package files" panel. See the upload path
-  // (createUploadedStave) for staves that do ship real files.
+  const isPublished = status === "published";
+
+  // Loom-authored staves carry their text in `stave.body` with no package files —
+  // fall back to a synthetic stave.md so the tree + readme still render.
   const effectiveFiles = useMemo<StavePackageFile[]>(
     () =>
       packageFiles.length > 0
@@ -138,26 +180,75 @@ export function StaveDetailClient({
     [packageFiles, stave.body],
   );
 
-  const defaultPath =
-    effectiveFiles.find((f) => f.path.endsWith("README.md"))?.path ??
-    effectiveFiles[0]?.path ??
-    "";
+  // Entrypoint resolution: explicit column → file mirroring body → README → first.
+  const entrypointPath = useMemo(() => {
+    if (
+      stave.entrypointPath &&
+      effectiveFiles.some((f) => f.path === stave.entrypointPath)
+    ) {
+      return stave.entrypointPath;
+    }
+    const byBody = effectiveFiles.find((f) => f.content === stave.body)?.path;
+    if (byBody) return byBody;
+    const byReadme = effectiveFiles.find((f) =>
+      f.path.endsWith("README.md"),
+    )?.path;
+    return byReadme ?? effectiveFiles[0]?.path ?? "";
+  }, [effectiveFiles, stave.entrypointPath, stave.body]);
 
   const pathToContent = useMemo(() => {
-    const map = new Map<string, string>();
-    effectiveFiles.forEach((f) => map.set(f.path, f.content));
-    return map;
+    const m = new Map<string, string>();
+    effectiveFiles.forEach((f) => m.set(f.path, f.content));
+    return m;
+  }, [effectiveFiles]);
+
+  const sizes = useMemo(() => {
+    const m = new Map<string, number>();
+    effectiveFiles.forEach((f) => m.set(f.path, byteLength(f.content)));
+    return m;
   }, [effectiveFiles]);
 
   const tree = useMemo(() => buildTree(effectiveFiles), [effectiveFiles]);
 
-  const [selectedPath, setSelectedPath] = useState(defaultPath);
-  const [tab, setTab] = useState<"raw" | "preview">("preview");
-  const [totals, setTotals] = useState(initialTotals);
-  const [userVote, setUserVote] = useState(initialUserVote);
+  // The Readme tab exists only when a real README file was packaged — we render
+  // that file verbatim (not the entrypoint). Synthetic stave.md doesn't count.
+  const readmePath = useMemo(
+    () =>
+      packageFiles.find(
+        (f) => f.path.split("/").pop()?.toLowerCase() === "readme.md",
+      )?.path ?? null,
+    [packageFiles],
+  );
+  const hasReadme = readmePath != null;
+  const readmeBody = readmePath ? pathToContent.get(readmePath) ?? "" : "";
+
+  // --- tabs: instant client swap, URL kept in sync for deep-links/refresh ----
+  const defaultTab = defaultTabFor(hasReadme);
+  const [tab, setTab] = useState<TabId>(initialTab);
+  // A ?tab=readme deep-link on a stave with no README falls back to the default.
+  const activeTab: TabId = tab === "readme" && !hasReadme ? defaultTab : tab;
+  const selectTab = (next: TabId) => {
+    setTab(next);
+    if (typeof window !== "undefined") {
+      const url =
+        next === defaultTab
+          ? `/staves/${stave.slug}`
+          : `/staves/${stave.slug}?tab=${next}`;
+      window.history.replaceState(null, "", url);
+    }
+  };
+
+  const tabDefs: { id: TabId; label: string; badge: number | null }[] = [
+    ...(hasReadme
+      ? [{ id: "readme" as const, label: "Readme", badge: null }]
+      : []),
+    { id: "files", label: "Files", badge: effectiveFiles.length },
+    { id: "discussion", label: "Discussion", badge: stats.openThreads },
+    { id: "versions", label: "Versions", badge: versions.length },
+  ];
+
+  // --- engagement / action handlers -----------------------------------------
   const [saved, setSaved] = useState(initialSaved);
-  const [comments, setComments] = useState(initialComments);
-  const [commentDraft, setCommentDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -167,57 +258,21 @@ export function StaveDetailClient({
   const [grimoireToast, setGrimoireToast] = useState<string | null>(null);
   const [showDownload, setShowDownload] = useState(false);
   const [downloadFolder, setDownloadFolder] = useState("");
-
-  const content = selectedPath ? pathToContent.get(selectedPath) ?? "" : "";
-
-  const isPublished = status === "published";
-
-  const latestVersion = versions.length
-    ? Math.max(...versions.map((v) => v.version))
-    : stave.version;
-  const latest = versions.find((v) => v.version === latestVersion);
-  const hasNewer =
-    status === "published" && latest != null && stave.version < latestVersion;
-
-  const sendVote = (direction: 1 | -1) => {
-    if (!isLoaded || !isSignedIn) return;
-    const retract = userVote === direction;
-    const nextValue = retract ? 0 : direction;
-
-    startTransition(async () => {
-      setError(null);
-      try {
-        const res = await fetch(`/api/staves/${stave.id}/vote`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ value: nextValue }),
-        });
-        if (!res.ok) throw new Error("Vote failed");
-        const data = (await res.json()) as {
-          upvotes: number;
-          downvotes: number;
-          userVote: 1 | -1 | 0;
-        };
-        setTotals({
-          upvotes: data.upvotes,
-          downvotes: data.downvotes,
-          commentsCount: totals.commentsCount,
-        });
-        setUserVote(data.userVote);
-      } catch {
-        setError("Could not record vote.");
-      }
-    });
-  };
+  // Files tab: inline split inspector — selected file + raw/formatted toggle.
+  const [selectedPath, setSelectedPath] = useState<string>(entrypointPath);
+  const [fileView, setFileView] = useState<"preview" | "raw">("preview");
+  const selectedContent = selectedPath
+    ? pathToContent.get(selectedPath) ?? ""
+    : "";
 
   const toggleSave = () => {
-    if (!isLoaded || !isSignedIn) return;
+    if (!isSignedIn) return;
     startTransition(async () => {
       setError(null);
-      const nextSaved = !saved;
+      const next = !saved;
       try {
         const res = await fetch(`/api/staves/${stave.id}/save`, {
-          method: nextSaved ? "POST" : "DELETE",
+          method: next ? "POST" : "DELETE",
         });
         if (!res.ok) throw new Error("Save failed");
         const data = (await res.json()) as { saved: boolean };
@@ -228,29 +283,37 @@ export function StaveDetailClient({
     });
   };
 
-  const submitComment = () => {
-    const body = commentDraft.trim();
-    if (!body || !isLoaded || !isSignedIn) return;
+  const fork = () => {
+    if (!isSignedIn) return;
     startTransition(async () => {
       setError(null);
       try {
-        const res = await fetch(`/api/staves/${stave.id}/comments`, {
+        const res = await fetch(`/api/staves/${stave.id}/fork`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ body }),
         });
-        if (!res.ok) throw new Error("Comment failed");
-        const data = (await res.json()) as {
-          comments: StaveCommentDTO[];
-          count: number;
-        };
-        setComments(data.comments);
-        setCommentDraft("");
-        setTotals((t) => ({ ...t, commentsCount: data.count }));
+        if (!res.ok) throw new Error("Fork failed");
+        const data = (await res.json()) as { id: string };
+        router.push(`/loom?id=${data.id}`);
       } catch {
-        setError("Could not post comment.");
+        setError("Could not fork stave.");
       }
     });
+  };
+
+  const triggerDownload = (folder?: string) => {
+    const trimmed = folder?.trim();
+    const query = trimmed ? `?folder=${encodeURIComponent(trimmed)}` : "";
+    window.location.href = `/api/staves/${stave.id}/download${query}`;
+    setShowDownload(false);
+  };
+
+  const startDownload = () => {
+    if (effectiveFiles.length > 1) {
+      setDownloadFolder("");
+      setShowDownload(true);
+    } else {
+      triggerDownload();
+    }
   };
 
   const confirmPublish = () => {
@@ -288,41 +351,6 @@ export function StaveDetailClient({
     });
   };
 
-  const fork = () => {
-    if (!isSignedIn) return;
-    startTransition(async () => {
-      setError(null);
-      try {
-        const res = await fetch(`/api/staves/${stave.id}/fork`, {
-          method: "POST",
-        });
-        if (!res.ok) throw new Error("Fork failed");
-        const data = (await res.json()) as { id: string };
-        router.push(`/loom?id=${data.id}`);
-      } catch {
-        setError("Could not fork stave.");
-      }
-    });
-  };
-
-  // Single-file staves download the raw markdown directly; multi-file packages
-  // first ask for a parent-folder name (defaulting to the author's username).
-  const triggerDownload = (folder?: string) => {
-    const trimmed = folder?.trim();
-    const query = trimmed ? `?folder=${encodeURIComponent(trimmed)}` : "";
-    window.location.href = `/api/staves/${stave.id}/download${query}`;
-    setShowDownload(false);
-  };
-
-  const startDownload = () => {
-    if (effectiveFiles.length > 1) {
-      setDownloadFolder("");
-      setShowDownload(true);
-    } else {
-      triggerDownload();
-    }
-  };
-
   const remove = () => {
     if (!confirm("Delete this stave? This cannot be undone from the UI.")) return;
     startTransition(async () => {
@@ -337,460 +365,536 @@ export function StaveDetailClient({
     });
   };
 
+  const visibleTags = stave.tags.slice(0, 5);
+  const extraTags = stave.tags.length - visibleTags.length;
+
   return (
-    <div className="stave-detail-stack">
-      <header className="stave-detail-head">
-        <h1 className="stave-detail-title">{stave.title}</h1>
-        <p className="stave-detail-author">
-          by <Link href={sagaHref}>{authorName}</Link>
-          <span className="tag" style={{ marginLeft: 8 }}>
-            {stave.license}
-          </span>
-          {isAuthor ? (
-            <span className="tag" style={{ marginLeft: 8 }}>
-              {status === "published" ? "Published" : "Draft"}
-            </span>
+    <div className="stave08">
+      {/* HEADER */}
+      <header className="stave08-head">
+        <div className="stave08-titleblock">
+          <h1 className="stave08-title">{stave.title}</h1>
+          <div className="stave08-slug">{stave.slug}</div>
+          <p className="stave08-subline">
+            {stave.description ?? "No description provided."}
+          </p>
+          <div className="stave08-meta">
+            <span className="stave08-ver">v{stave.version}</span>
+            {isAuthor ? (
+              <span className="tag">{isPublished ? "Published" : "Draft"}</span>
+            ) : null}
+            {stave.private ? <span className="tag">Unlisted</span> : null}
+            {visibleTags.map((t) => (
+              <span key={t} className="tag">
+                {t}
+              </span>
+            ))}
+            {extraTags > 0 ? <span className="tag">+{extraTags} more</span> : null}
+          </div>
+
+          {forkedFrom ? (
+            <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+              <GitFork size={11} aria-hidden /> Forked from{" "}
+              {forkedFrom.slug ? (
+                <Link href={`/staves/${forkedFrom.slug}`}>{forkedFrom.title}</Link>
+              ) : (
+                <span>{forkedFrom.title}</span>
+              )}
+              {forkedFrom.authorUsername ? ` by ${forkedFrom.authorUsername}` : ""}
+            </p>
           ) : null}
-        </p>
-        {stave.description ? (
-          <p className="stave-detail-desc">{stave.description}</p>
-        ) : null}
-        <div className="stave-detail-tags">
-          {stave.tags.map((tag) => (
-            <span key={`${stave.id}-${tag}`} className="tag">
-              {tag}
-            </span>
-          ))}
         </div>
 
-        {forkedFrom ? (
-          <p className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>
-            <GitFork size={12} aria-hidden /> Forked from{" "}
-            {forkedFrom.slug ? (
-              <Link href={`/staves/${forkedFrom.slug}`}>{forkedFrom.title}</Link>
-            ) : (
-              <span>{forkedFrom.title}</span>
-            )}
-            {forkedFrom.authorUsername ? ` by ${forkedFrom.authorUsername}` : ""}
-          </p>
-        ) : null}
+        <div className="stave08-actions">
+          <div className="stave08-actionrow">
+            {isPublished && isSignedIn ? (
+              <button
+                type="button"
+                className={`btn btn-ghost ${saved ? "btn-accent" : ""}`}
+                onClick={toggleSave}
+                disabled={pending}
+              >
+                <Bookmark size={14} /> {saved ? "Saved" : "Save"}
+              </button>
+            ) : null}
+            {isPublished && isLoaded && !isSignedIn ? (
+              <GaldrSignInButton>
+                <span className="btn btn-ghost">
+                  <Bookmark size={14} /> Save
+                </span>
+              </GaldrSignInButton>
+            ) : null}
 
-        {hasNewer && latest ? (
-          <p className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>
-            A newer version is available —{" "}
-            <Link href={`/staves/${latest.slug}`}>v{latest.version} →</Link>
-          </p>
-        ) : null}
+            {isPublished && isSignedIn && !isAuthor ? (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={fork}
+                disabled={pending}
+              >
+                <GitFork size={14} /> {pending ? "Forking…" : "Fork"}
+              </button>
+            ) : null}
+            {isPublished && isLoaded && !isSignedIn ? (
+              <GaldrSignInButton>
+                <span className="btn btn-ghost">
+                  <GitFork size={14} /> Fork
+                </span>
+              </GaldrSignInButton>
+            ) : null}
+
+            {isPublished && isSignedIn ? (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setShowAddToGrimoire(true)}
+                disabled={pending}
+              >
+                <BookMarked size={14} /> Add to…
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={startDownload}
+              disabled={pending}
+            >
+              <Download size={14} /> Download
+            </button>
+          </div>
+
+        </div>
       </header>
 
-      <section className="stats-grid" aria-label="Stave statistics">
-        <article className="stat-cell">
-          <span className="stat-label">Upvotes</span>
-          <span className="stat-value">{totals.upvotes.toLocaleString()}</span>
-        </article>
-        <article className="stat-cell">
-          <span className="stat-label">Downvotes</span>
-          <span className="stat-value">{totals.downvotes.toLocaleString()}</span>
-        </article>
-        <article className="stat-cell">
-          <span className="stat-label">Comments</span>
-          <span className="stat-value">{totals.commentsCount.toLocaleString()}</span>
-        </article>
-        <article className="stat-cell">
-          <span className="stat-label">Registry views</span>
-          <span className="stat-value">{stave.viewsCount.toLocaleString()}</span>
-        </article>
-        <article className="stat-cell">
-          <span className="stat-label">Version</span>
-          <span className="stat-value">v{stave.version}</span>
-        </article>
-        <article className="stat-cell">
-          <span className="stat-label">Published</span>
-          <span className="stat-value" style={{ fontSize: 15, fontWeight: 400 }}>
-            {stave.publishedAt
-              ? new Date(stave.publishedAt).toLocaleDateString()
-              : "—"}
-          </span>
-        </article>
-      </section>
+      {/* TAB BAR */}
+      <div className="stave08-tabs" role="tablist">
+        {tabDefs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === t.id}
+            className={`stave08-tab ${activeTab === t.id ? "is-active" : ""}`}
+            onClick={() => selectTab(t.id)}
+          >
+            {t.label}
+            {t.badge != null && t.badge > 0 ? (
+              <span className="stave08-tab-badge">{t.badge}</span>
+            ) : null}
+          </button>
+        ))}
+      </div>
 
-      {versions.length > 1 ? (
-        <section className="stack-sm" aria-label="Versions">
-          <div className="stave-comments-head">
-            <span>Versions</span>
-          </div>
-          <ul className="side-card-list">
-            {versions.map((v) => (
-              <li key={v.slug}>
-                <Link href={`/staves/${v.slug}`}>
-                  v{v.version}
-                  {v.version === stave.version ? " (this version)" : ""}
-                </Link>
-                <small>
-                  {v.publishedAt
-                    ? new Date(v.publishedAt).toLocaleDateString()
-                    : ""}
-                  {v.releaseNotes ? ` · ${v.releaseNotes}` : ""}
-                </small>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      {/* BODY */}
+      <div className="stave08-grid">
+        <div>
+          {activeTab === "readme" ? (
+            readmeBody.trim() ? (
+              <article className="loom-preview stave-md-preview stave08-readme">
+                {renderMarkdownPreview(readmeBody)}
+              </article>
+            ) : (
+              <p className="stave08-empty">This README file is empty.</p>
+            )
+          ) : null}
 
-      <section className="stave-inspector" aria-label="Stave package contents">
-        <div className="stave-inspector-head">
-          <h2 className="stave-inspector-title">Package</h2>
-          <span className="stave-inspector-path">{selectedPath}</span>
+          {activeTab === "files" ? (
+            <section className="stave-inspector" aria-label="Package contents">
+              {tree.length === 0 ? (
+                <p className="muted" style={{ padding: 16 }}>
+                  No package files for this stave.
+                </p>
+              ) : (
+                <div className="stave-inspector-grid">
+                  <aside className="stave-tree-panel" aria-label="File tree">
+                    <FileTree
+                      nodes={tree}
+                      sizes={sizes}
+                      entrypoint={entrypointPath}
+                      active={selectedPath}
+                      onOpen={setSelectedPath}
+                    />
+                  </aside>
+                  <div className="stave-markdown-panel">
+                    <div className="stave-md-tabs" role="tablist">
+                      <span className="stave-inspector-path" style={{ marginRight: "auto" }}>
+                        {selectedPath}
+                        {selectedPath === entrypointPath ? (
+                          <span className="stave08-ep-badge" style={{ marginLeft: 8 }}>
+                            entrypoint
+                          </span>
+                        ) : null}
+                      </span>
+                      <button
+                        type="button"
+                        role="tab"
+                        className={`stave-md-tab ${fileView === "preview" ? "is-active" : ""}`}
+                        onClick={() => setFileView("preview")}
+                      >
+                        Formatted
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        className={`stave-md-tab ${fileView === "raw" ? "is-active" : ""}`}
+                        onClick={() => setFileView("raw")}
+                      >
+                        Raw
+                      </button>
+                    </div>
+                    {fileView === "raw" ? (
+                      <textarea
+                        className="stave-md-raw"
+                        readOnly
+                        value={selectedContent}
+                        spellCheck={false}
+                        aria-label="Raw file content"
+                      />
+                    ) : (
+                      <article className="loom-preview stave-md-preview">
+                        {renderMarkdownPreview(selectedContent)}
+                      </article>
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          {activeTab === "discussion" ? (
+            <p className="stave08-empty">
+              No discussion yet — threads arrive with the Tavern. This tab will hold
+              the auto-created discussion plus Q&amp;A and showcase threads.
+            </p>
+          ) : null}
+
+          {activeTab === "versions" ? (
+            versions.length === 0 ? (
+              <p className="stave08-empty">No published versions yet.</p>
+            ) : (
+              <ul className="stave08-list">
+                {versions.map((v) => (
+                  <li key={v.slug}>
+                    <div className="stave08-list-main">
+                      <Link href={`/staves/${v.slug}`}>
+                        v{v.version}
+                        {v.version === stave.version ? " · this version" : ""}
+                      </Link>
+                      {v.releaseNotes ? (
+                        <div className="stave08-list-sub">{v.releaseNotes}</div>
+                      ) : null}
+                    </div>
+                    <span className="stave08-list-aside">
+                      {v.publishedAt
+                        ? new Date(v.publishedAt).toLocaleDateString()
+                        : "—"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : null}
+
+          {error ? (
+            <p className="stave-error" role="alert" style={{ marginTop: 16 }}>
+              {error}
+            </p>
+          ) : null}
         </div>
-        <div className="stave-inspector-grid">
-          <aside className="stave-tree-panel" aria-label="File tree">
-            {tree.length === 0 ? (
-              <p className="muted" style={{ padding: 12 }}>
-                No package files for this stave.
+
+        {/* RIGHT RAIL */}
+        <aside className="stave08-rail">
+          <section className="side-card">
+            <h3 className="side-card-title">Maintainer</h3>
+            <div className="stave08-maint">
+              {authorAvatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  className="stave08-avatar"
+                  src={authorAvatarUrl}
+                  alt=""
+                  aria-hidden
+                />
+              ) : (
+                <span className="stave08-avatar" aria-hidden>
+                  {authorName.charAt(0).toUpperCase()}
+                </span>
+              )}
+              <div style={{ minWidth: 0 }}>
+                <Link href={sagaHref} className="stave08-maint-name">
+                  {authorName}
+                </Link>
+                <div className="stave08-maint-sub">
+                  {scribeStats.staveCount}{" "}
+                  {scribeStats.staveCount === 1 ? "stave" : "staves"} ·{" "}
+                  {scribeStats.saves.toLocaleString()} saves
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm btn-block"
+              disabled
+              title="Following is coming soon"
+            >
+              + Follow
+            </button>
+          </section>
+
+          <section className="side-card">
+            <h3 className="side-card-title">Stats</h3>
+            <ul className="side-card-list">
+              <li>
+                <span>Downloads</span>
+                <small>{stats.downloads.toLocaleString()}</small>
+              </li>
+              <li>
+                <span>Saves</span>
+                <small>{stats.saves.toLocaleString()}</small>
+              </li>
+              <li>
+                <span>Open threads</span>
+                <small>{stats.openThreads}</small>
+              </li>
+              <li>
+                <span>Last published</span>
+                {/* Relative time is computed from Date.now(); sub-second drift
+                    between server and client render is expected and harmless. */}
+                <small suppressHydrationWarning>{timeAgo(stats.lastPublishedAt)}</small>
+              </li>
+            </ul>
+          </section>
+
+          <section className="side-card">
+            <h3 className="side-card-title">Found in grimoires</h3>
+            {grimoires.length === 0 ? (
+              <p className="muted" style={{ fontSize: 12 }}>
+                Not in any grimoires yet.
               </p>
             ) : (
-              <TreeList
-                nodes={tree}
-                depth={0}
-                selectedPath={selectedPath}
-                onSelect={setSelectedPath}
-              />
+              <>
+                <ul className="side-card-list">
+                  {grimoires.slice(0, 3).map((g) => (
+                    <li key={g.slug} className="stave08-grim-row">
+                      <Link href={`/grimoires/${g.slug}`}>{g.title}</Link>
+                      <span className="tag">{g.staveCount}</span>
+                    </li>
+                  ))}
+                </ul>
+                {grimoires.length > 3 ? (
+                  <Link
+                    href={`/registry?stave=${encodeURIComponent(stave.slug)}`}
+                    className="stave08-viewall"
+                  >
+                    View all {grimoires.length} →
+                  </Link>
+                ) : null}
+              </>
             )}
-          </aside>
-          <div className="stave-markdown-panel">
-            <div className="stave-md-tabs" role="tablist">
-              <button
-                type="button"
-                role="tab"
-                className={`stave-md-tab ${tab === "raw" ? "is-active" : ""}`}
-                onClick={() => setTab("raw")}
-              >
-                Raw
-              </button>
-              <button
-                type="button"
-                role="tab"
-                className={`stave-md-tab ${tab === "preview" ? "is-active" : ""}`}
-                onClick={() => setTab("preview")}
-              >
-                Preview
-              </button>
-            </div>
-            {tab === "raw" ? (
-              <textarea
-                className="stave-md-raw"
-                readOnly
-                value={content}
-                spellCheck={false}
-                aria-label="Raw markdown"
-              />
-            ) : (
-              <article className="loom-preview stave-md-preview">
-                {renderMarkdownPreview(content)}
-              </article>
-            )}
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <section aria-label="Engagement" className="stack-sm">
-        <div className="stave-actions">
-          {isPublished ? (
-            <>
-              <div className="stave-vote-group">
+          <section className="side-card">
+            <h3 className="side-card-title">Discussion settings</h3>
+            <ul className="side-card-list">
+              <li>
+                <span>Auto-create</span>
+                <small>on</small>
+              </li>
+              <li>
+                <span>Author-only OP edit</span>
+                <small>on</small>
+              </li>
+              <li>
+                <span>Threading depth</span>
+                <small>2</small>
+              </li>
+              <li>
+                <span>Empty threads on /tavern</span>
+                <small>hidden</small>
+              </li>
+            </ul>
+          </section>
+
+          {isAuthor ? (
+            <section className="side-card">
+              <h3 className="side-card-title">Owner</h3>
+              {status === "draft" ? (
+                <>
+                  <Link
+                    href={`/loom?id=${stave.id}`}
+                    className="btn btn-soft btn-sm btn-block"
+                  >
+                    Edit in Loom
+                  </Link>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm btn-block"
+                    onClick={() => setShowPublish(true)}
+                    disabled={pending}
+                  >
+                    Publish
+                  </button>
+                </>
+              ) : (
                 <button
                   type="button"
-                  className={`stave-action-btn ${userVote === 1 ? "is-active" : ""}`}
-                  onClick={() => sendVote(1)}
-                  disabled={!isLoaded || !isSignedIn || pending}
-                  aria-pressed={userVote === 1}
+                  className="btn btn-primary btn-sm btn-block"
+                  onClick={newVersion}
+                  disabled={pending}
                 >
-                  <ThumbsUp size={13} />
-                  {totals.upvotes}
+                  New version
                 </button>
-                <button
-                  type="button"
-                  className={`stave-action-btn ${userVote === -1 ? "is-active" : ""}`}
-                  onClick={() => sendVote(-1)}
-                  disabled={!isLoaded || !isSignedIn || pending}
-                  aria-pressed={userVote === -1}
-                >
-                  <ThumbsDown size={13} />
-                  {totals.downvotes}
-                </button>
-              </div>
+              )}
               <button
                 type="button"
-                className={`stave-action-btn ${saved ? "is-active" : ""}`}
-                onClick={toggleSave}
-                disabled={!isLoaded || !isSignedIn || pending}
+                className="btn btn-ghost btn-sm btn-block"
+                onClick={remove}
+                disabled={pending}
               >
-                <Bookmark size={13} />
-                {saved ? "Saved" : "Save to library"}
+                Delete
               </button>
-            </>
+            </section>
           ) : null}
+        </aside>
+      </div>
 
-          {isLoaded && isSignedIn && !isAuthor && isPublished ? (
-            <button
-              type="button"
-              className="stave-action-btn"
-              onClick={fork}
-              disabled={pending}
-            >
-              <GitFork size={13} />
-              {pending ? "Forking…" : "Fork"}
-            </button>
-          ) : null}
-
-          {isLoaded && !isSignedIn && isPublished ? (
-            <GaldrSignInButton>
-              <span className="stave-action-btn">
-                <GitFork size={13} />
-                Sign in to fork
-              </span>
-            </GaldrSignInButton>
-          ) : null}
-
-          {isLoaded && isSignedIn && isPublished ? (
-            <button
-              type="button"
-              className="stave-action-btn"
-              onClick={() => setShowAddToGrimoire(true)}
-              disabled={pending}
-            >
-              <BookMarked size={13} />
-              Add to grimoire
-            </button>
-          ) : null}
-
-          {isLoaded && !isSignedIn && isPublished ? (
-            <GaldrSignInButton>
-              <span className="stave-action-btn">
-                <BookMarked size={13} />
-                Sign in to add to a grimoire
-              </span>
-            </GaldrSignInButton>
-          ) : null}
-
+      {/* Grimoire toast */}
+      {grimoireToast ? (
+        <p className="muted" style={{ fontSize: 12.5 }} role="status">
+          Added to <strong>{grimoireToast}</strong>.{" "}
           <button
             type="button"
-            className="stave-action-btn"
-            onClick={startDownload}
-            disabled={pending}
-          >
-            <Download size={13} />
-            Download
-          </button>
-
-          <Link
-            href={sagaHref}
             className="stave-action-link"
-            style={{ marginLeft: "auto" }}
+            onClick={() => setGrimoireToast(null)}
           >
-            View saga →
-          </Link>
-        </div>
+            Dismiss
+          </button>
+        </p>
+      ) : null}
 
-        {showDownload ? (
-          <div className="stave-comment-compose" role="dialog" aria-label="Download package">
-            <label className="label-tiny" htmlFor="download-folder">
-              Parent folder name
-            </label>
-            <input
-              id="download-folder"
-              className="input"
-              value={downloadFolder}
-              maxLength={64}
-              placeholder={authorName}
-              onChange={(e) => setDownloadFolder(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  triggerDownload(downloadFolder);
-                }
-              }}
-            />
-            <p className="muted" style={{ fontSize: 12 }}>
-              This package has {effectiveFiles.length} files — they&apos;ll be zipped under
-              this folder. Left blank, we use <strong>{authorName}</strong>.
-            </p>
-            <div className="empty-state-actions">
+      {/* Download folder prompt (multi-file) */}
+      {showDownload ? (
+        <div className="stave08-dialog-backdrop" onClick={() => setShowDownload(false)}>
+          <div
+            className="stave08-dialog"
+            role="dialog"
+            aria-label="Download package"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 440 }}
+          >
+            <div className="stave08-dialog-head">
+              <span className="label-tiny">Download package</span>
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"
                 onClick={() => setShowDownload(false)}
+                aria-label="Close"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => triggerDownload(downloadFolder)}
-              >
-                <Download size={13} />
-                Download .zip
+                <X size={14} />
               </button>
             </div>
-          </div>
-        ) : null}
-
-        {grimoireToast ? (
-          <p className="muted" style={{ fontSize: 12.5 }} role="status">
-            Added to <strong>{grimoireToast}</strong>.{" "}
-            <button
-              type="button"
-              className="stave-action-link"
-              onClick={() => setGrimoireToast(null)}
-            >
-              Dismiss
-            </button>
-          </p>
-        ) : null}
-
-        {isAuthor ? (
-          <div className="stave-actions">
-            {status === "draft" ? (
-              <>
-                <Link href={`/loom?id=${stave.id}`} className="btn btn-soft btn-sm">
-                  Edit in Loom
-                </Link>
+            <div className="stave08-dialog-body" style={{ padding: 16, gap: 10 }}>
+              <label className="label-tiny" htmlFor="download-folder">
+                Parent folder name
+              </label>
+              <input
+                id="download-folder"
+                className="input"
+                value={downloadFolder}
+                maxLength={64}
+                placeholder={authorName}
+                onChange={(e) => setDownloadFolder(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    triggerDownload(downloadFolder);
+                  }
+                }}
+              />
+              <p className="muted" style={{ fontSize: 12 }}>
+                {effectiveFiles.length} files will be zipped under this folder. Left
+                blank, we use <strong>{authorName}</strong>.
+              </p>
+              <div className="empty-state-actions">
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setShowDownload(false)}
+                >
+                  Cancel
+                </button>
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
-                  onClick={() => setShowPublish(true)}
-                  disabled={pending}
+                  onClick={() => triggerDownload(downloadFolder)}
                 >
-                  Publish
+                  <Download size={13} /> Download .zip
                 </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={newVersion}
-                disabled={pending}
-              >
-                New version
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={remove}
-              disabled={pending}
-            >
-              Delete
-            </button>
-          </div>
-        ) : null}
-
-        {isPublished && isLoaded && !isSignedIn ? (
-          <p className="muted" style={{ fontSize: 12.5 }}>
-            <GaldrSignInButton>
-              <button type="button" className="btn btn-ghost btn-sm">
-                Sign in
-              </button>
-            </GaldrSignInButton>{" "}
-            to vote, save, or comment.
-          </p>
-        ) : null}
-
-        {error ? (
-          <p className="stave-error" role="alert">
-            {error}
-          </p>
-        ) : null}
-      </section>
-
-      {showPublish ? (
-        <div className="stave-comment-compose" role="dialog" aria-label="Publish stave">
-          <label className="label-tiny" htmlFor="release-notes">
-            Release notes (optional, ≤ 500 chars)
-          </label>
-          <textarea
-            id="release-notes"
-            className="textarea"
-            rows={3}
-            maxLength={500}
-            value={releaseNotes}
-            onChange={(e) => setReleaseNotes(e.target.value)}
-            placeholder="What changed in this release?"
-          />
-          <p className="muted" style={{ fontSize: 12 }}>
-            The public URL slug is locked once published.
-          </p>
-          <div className="empty-state-actions">
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => setShowPublish(false)}
-              disabled={pending}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={confirmPublish}
-              disabled={pending}
-            >
-              Publish
-            </button>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}
 
-      {isPublished ? (
-      <section aria-label="Comments" className="stack-sm">
-        <div className="stave-comments-head">
-          <MessageCircle size={14} aria-hidden />
-          <span>
-            Comments <strong>{totals.commentsCount}</strong>
-          </span>
-        </div>
-
-        <ul className="stave-comment-list">
-          {comments.map((c) => (
-            <li key={c.id} className="stave-comment">
-              <div className="stave-comment-meta">
-                <strong>{c.authorLabel}</strong>
-                <span className="muted">
-                  {new Date(c.createdAt).toLocaleString()}
-                </span>
-              </div>
-              <p className="stave-comment-body">{c.body}</p>
-            </li>
-          ))}
-        </ul>
-
-        {isLoaded && isSignedIn ? (
-          <div className="stave-comment-compose">
-            <label className="label-tiny" htmlFor="comment-input">
-              Add a comment
-            </label>
-            <textarea
-              id="comment-input"
-              className="textarea"
-              rows={4}
-              value={commentDraft}
-              onChange={(e) => setCommentDraft(e.target.value)}
-              placeholder="Invocation notes, bindings that worked, warnings..."
-            />
-            <div>
+      {/* Publish dialog */}
+      {showPublish ? (
+        <div className="stave08-dialog-backdrop" onClick={() => setShowPublish(false)}>
+          <div
+            className="stave08-dialog"
+            role="dialog"
+            aria-label="Publish stave"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 480 }}
+          >
+            <div className="stave08-dialog-head">
+              <span className="label-tiny">Publish stave</span>
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
-                onClick={submitComment}
-                disabled={pending || !commentDraft.trim()}
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowPublish(false)}
+                aria-label="Close"
               >
-                Post comment
+                <X size={14} />
               </button>
             </div>
+            <div className="stave08-dialog-body" style={{ padding: 16, gap: 10 }}>
+              <label className="label-tiny" htmlFor="release-notes">
+                Release notes (optional, ≤ 500 chars)
+              </label>
+              <textarea
+                id="release-notes"
+                className="textarea"
+                rows={3}
+                maxLength={500}
+                value={releaseNotes}
+                onChange={(e) => setReleaseNotes(e.target.value)}
+                placeholder="What changed in this release?"
+              />
+              <p className="muted" style={{ fontSize: 12 }}>
+                The public URL slug is locked once published.
+              </p>
+              <div className="empty-state-actions">
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setShowPublish(false)}
+                  disabled={pending}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={confirmPublish}
+                  disabled={pending}
+                >
+                  Publish
+                </button>
+              </div>
+            </div>
           </div>
-        ) : null}
-      </section>
+        </div>
       ) : null}
 
       {showAddToGrimoire ? (
