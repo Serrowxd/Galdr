@@ -763,6 +763,11 @@ textarea {
   font-weight: 600;
   color: var(--text);
   line-height: 1.3;
+  /* Yield space to the (non-shrinking) type/version tags and break a long
+     single-word title rather than shoving the tags past the card edge. */
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .stave-card-title-tags {
