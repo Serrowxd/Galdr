@@ -2,8 +2,13 @@ import { and, eq, ilike, isNull } from "drizzle-orm";
 
 import { getDbOptional } from "@/db";
 import { staves, userProfiles } from "@/db/schema";
+import { clientIp, enforceRateLimit } from "@/lib/rateLimitGuard";
 
 export async function GET(req: Request) {
+  // Prefix queries can enumerate usernames/slugs — throttle per IP.
+  const limited = enforceRateLimit(`mentions:${clientIp(req)}`, 30, 60_000);
+  if (limited) return limited;
+
   const q = new URL(req.url).searchParams.get("q") ?? "";
   if (q.trim().length < 2) return Response.json({ staves: [], scribes: [] });
 

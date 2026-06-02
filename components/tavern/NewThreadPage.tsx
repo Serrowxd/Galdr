@@ -113,7 +113,7 @@ export function NewThreadPage({ userId, attached }: NewThreadPageProps) {
   const [format, setFormat] = useState<Format>("discussion");
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<Category | null>(null);
-  const [tagsJson, setTagsJson] = useState<string>("[]");
+  const [tags, setTags] = useState<string[]>([]);
   const [isAttached, setIsAttached] = useState(attached !== null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
@@ -140,13 +140,6 @@ export function NewThreadPage({ userId, attached }: NewThreadPageProps) {
     setTitleError(null);
     setCategoryError(null);
 
-    let parsedTags: string[] = [];
-    try {
-      parsedTags = JSON.parse(tagsJson) as string[];
-    } catch {
-      parsedTags = [];
-    }
-
     const res = await fetch("/api/threads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -156,7 +149,7 @@ export function NewThreadPage({ userId, attached }: NewThreadPageProps) {
         format,
         category: needsCategory ? category : null,
         staveFamilyId,
-        tags: parsedTags,
+        tags,
       }),
     });
 
@@ -170,18 +163,6 @@ export function NewThreadPage({ userId, attached }: NewThreadPageProps) {
     return { ok: true };
   }
 
-  // TagsInput uses a hidden field; we sync it via a wrapper that reads the hidden input
-  // value on form change. Simpler: lift state up via an onTagsChange callback.
-  // Since TagsInput manages its own state + hidden input, we intercept it with a
-  // parent onChange handler on the wrapper div.
-  function handleTagsWrapperChange(e: React.ChangeEvent<HTMLDivElement>) {
-    const hidden = (e.target as HTMLElement).closest(".tags-input-wrapper")
-      ?.querySelector<HTMLInputElement>('input[type="hidden"]');
-    if (hidden) {
-      setTagsJson(hidden.value);
-    }
-  }
-
   return (
     <div className="new-thread-page">
       <div className="new-thread-page__header">
@@ -189,7 +170,7 @@ export function NewThreadPage({ userId, attached }: NewThreadPageProps) {
         {staveSlug && isAttached && (
           <p className="new-thread-page__subtitle">
             Posting to the discussion thread for{" "}
-            <a href={`/stave/${staveSlug}`} className="new-thread-page__stave-link">
+            <a href={`/staves/${staveSlug}`} className="new-thread-page__stave-link">
               {staveSlug}
             </a>
           </p>
@@ -278,13 +259,7 @@ export function NewThreadPage({ userId, attached }: NewThreadPageProps) {
               (optional, up to 8)
             </span>
           </label>
-          {/* We wrap TagsInput and intercept change events to sync tagsJson */}
-          <div
-            className="tags-input-wrapper"
-            onChange={handleTagsWrapperChange as unknown as React.ChangeEventHandler<HTMLDivElement>}
-          >
-            <TagsInput name="tags" max={8} />
-          </div>
+          <TagsInput name="tags" max={8} onTagsChange={setTags} />
         </div>
 
         {/* Composer */}

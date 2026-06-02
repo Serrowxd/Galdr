@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /** Inline tag normalizer (mirrors lib/threads.ts normalizeTags, no server imports). */
 function normalizeTag(raw: string): string {
@@ -17,12 +17,25 @@ export interface TagsInputProps {
   name: string;
   max?: number;
   initialTags?: string[];
+  /** Called with the current tag list whenever it changes. */
+  onTagsChange?: (tags: string[]) => void;
 }
 
-export function TagsInput({ name, max = 8, initialTags = [] }: TagsInputProps) {
+export function TagsInput({
+  name,
+  max = 8,
+  initialTags = [],
+  onTagsChange,
+}: TagsInputProps) {
   const [tags, setTags] = useState<string[]>(initialTags);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Surface tag changes to the parent via callback (no DOM-scraping needed).
+  useEffect(() => {
+    onTagsChange?.(tags);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tags]);
 
   function commit() {
     if (!draft.trim()) return;

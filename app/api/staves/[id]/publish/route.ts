@@ -8,7 +8,11 @@ import { enforceRateLimit } from "@/lib/rateLimitGuard";
 import { getStaveById } from "@/lib/staves";
 import { generateUniqueSlug, slugifyTitle } from "@/lib/staveSlug";
 import { createClient } from "@/lib/supabase/server";
-import { deriveAutoThreadTitle, reserveAutoThreadSlug } from "@/lib/threads";
+import {
+  deriveAutoThreadTitle,
+  isUniqueViolation,
+  reserveAutoThreadSlug,
+} from "@/lib/threads";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -79,36 +83,46 @@ export async function POST(request: Request, context: Ctx) {
   const slug = await generateUniqueSlug(db, slugifyTitle(stave.title), stave.id);
   const isHeadOfFamily = stave.id === stave.familyId;
 
-  await db.transaction(async (tx) => {
-    // 1. Publish the stave (inline equivalent of publishStave, within the tx).
-    await tx
-      .update(staves)
-      .set({
-        status: "published",
-        publishedAt: new Date(),
-        slug,
-        releaseNotes,
-        private: isPrivate,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(staves.id, id), isNull(staves.deletedAt)));
+  try {
+    await db.transaction(async (tx) => {
+      // 1. Publish the stave (inline equivalent of publishStave, within the tx).
+      await tx
+        .update(staves)
+        .set({
+          status: "published",
+          publishedAt: new Date(),
+          slug,
+          releaseNotes,
+          private: isPrivate,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(staves.id, id), isNull(staves.deletedAt)));
 
-    // 2. Auto-create a discussion thread only for the head of a family.
-    if (isHeadOfFamily) {
-      const threadSlug = await reserveAutoThreadSlug(tx, slug);
-      await tx.insert(threads).values({
-        staveFamilyId: stave.familyId,
-        authorId: stave.authorId,
-        title: deriveAutoThreadTitle(stave),
-        slug: threadSlug,
-        opBody: "",
-        isAutoCreated: true,
-        isPinned: true,
-        status: "open",
-        format: "discussion",
-      });
+      // 2. Auto-create a discussion thread only for the head of a family.
+      if (isHeadOfFamily) {
+        const threadSlug = await reserveAutoThreadSlug(tx, slug);
+        await tx.insert(threads).values({
+          staveFamilyId: stave.familyId,
+          authorId: stave.authorId,
+          title: deriveAutoThreadTitle(stave),
+          slug: threadSlug,
+          opBody: "",
+          isAutoCreated: true,
+          isPinned: true,
+          status: "open",
+          format: "discussion",
+        });
+      }
+    });
+  } catch (err) {
+    // A concurrent publish can win the auto-thread slug or the one-per-family
+    // unique constraint between our checks and this commit. Surface that as a
+    // 409 rather than an unhandled 500.
+    if (isUniqueViolation(err)) {
+      return NextResponse.json({ error: "conflict" }, { status: 409 });
     }
-  });
+    throw err;
+  }
 
   return NextResponse.json({ slug });
 }

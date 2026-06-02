@@ -231,7 +231,11 @@ export function TavernIndexLayout({
   query,
   viewerId,
 }: TavernIndexLayoutProps) {
-  const isFollowingAnon = query.surface === "following" && !viewerId;
+  // "Following" is not yet implemented (no follow graph). Anon users get a
+  // sign-in CTA; signed-in users get a "coming soon" note — neither falls
+  // through to the generic "no threads" feed, which would misrepresent why
+  // it's empty.
+  const isFollowing = query.surface === "following";
 
   return (
     <div className="container" style={{ paddingTop: 20, paddingBottom: 48 }}>
@@ -265,19 +269,31 @@ export function TavernIndexLayout({
             )}
           </div>
 
-          {/* Following-anon CTA */}
-          {isFollowingAnon ? (
+          {/* Following surface — not yet implemented */}
+          {isFollowing ? (
             <div className="empty-state" style={{ marginTop: 24 }}>
-              <h2>Sign in to see your following feed</h2>
-              <p>
-                When you follow stave authors or staves, their Tavern threads
-                appear here.
-              </p>
-              <div className="empty-state-actions">
-                <Link href="/sign-in" className="btn btn-primary">
-                  Sign in
-                </Link>
-              </div>
+              {viewerId ? (
+                <>
+                  <h2>Following feed is coming soon</h2>
+                  <p>
+                    Soon you&apos;ll be able to follow stave authors and staves
+                    and see their Tavern threads here.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2>Sign in to see your following feed</h2>
+                  <p>
+                    When you follow stave authors or staves, their Tavern
+                    threads appear here.
+                  </p>
+                  <div className="empty-state-actions">
+                    <Link href="/sign-in" className="btn btn-primary">
+                      Sign in
+                    </Link>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <FeedList

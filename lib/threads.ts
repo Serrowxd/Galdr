@@ -3,10 +3,9 @@
 
 import { nanoid } from "nanoid";
 
-import { getDbOptional } from "@/db";
-import { getDb } from "@/db";
+import { getDb, getDbOptional } from "@/db";
 import { threads, staves, userProfiles, threadComments } from "@/db/schema";
-import { and, asc, count, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, isNull, ne, sql } from "drizzle-orm";
 
 // ============================================================
 // ERRORS
@@ -19,6 +18,20 @@ export class RateLimitError extends Error {
 }
 
 export class ValidationError extends Error {}
+
+/**
+ * True when an error is a Postgres unique-constraint violation (SQLSTATE 23505).
+ * Used to convert slug / one-per-family insert races into a clean retry or 409
+ * rather than an unhandled 500.
+ */
+export function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "23505"
+  );
+}
 
 // ============================================================
 // TAG HELPERS
@@ -157,22 +170,34 @@ export async function createThread(input: {
       ? (input.category as ValidCategory)
       : null;
 
-  // 9. INSERT thread row
-  const inserted = await db
-    .insert(threads)
-    .values({
-      authorId: input.authorId,
-      title,
-      slug,
-      opBody: input.opBody,
-      format: input.format,
-      category,
-      staveFamilyId: input.staveFamilyId ?? null,
-      tags,
-      isAutoCreated: false,
-      status: "open",
-    })
-    .returning({ id: threads.id, slug: threads.slug });
+  // 9. INSERT thread row. The SELECT-then-INSERT slug reservation has a TOCTOU
+  // window: a concurrent request can claim the same slug between our check and
+  // insert. The UNIQUE constraint is the real guard — on a collision (23505) we
+  // retry once with a guaranteed-unique suffix instead of surfacing a 500.
+  const insertWithSlug = (s: string) =>
+    db
+      .insert(threads)
+      .values({
+        authorId: input.authorId,
+        title,
+        slug: s,
+        opBody: input.opBody,
+        format: input.format,
+        category,
+        staveFamilyId: input.staveFamilyId ?? null,
+        tags,
+        isAutoCreated: false,
+        status: "open",
+      })
+      .returning({ id: threads.id, slug: threads.slug });
+
+  let inserted;
+  try {
+    inserted = await insertWithSlug(slug);
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    inserted = await insertWithSlug(`${baseSlug}-${nanoid(6)}`);
+  }
 
   if (!inserted[0]) {
     throw new Error("Thread insert returned no row.");
@@ -371,8 +396,60 @@ export async function getTavernIndexPage(
 
   const { sort, time, surface, category, tag, showEmpty, offset, limit } = input;
 
+  // "following" is not yet implemented (no follow graph exists). Return empty
+  // rather than silently falling through to an unfiltered, mislabeled feed.
+  if (surface === "following") {
+    return { threads: [], hasMore: false, pinned: null };
+  }
+
+  // ---- pinned thread (global, stave-agnostic) ----
+  // Resolved before the main query so we can (a) exclude it from the page rows
+  // to avoid rendering it twice, and (b) return it only on the first page.
+  const pinnedRows = await db
+    .select({
+      id: threads.id,
+      slug: threads.slug,
+      title: threads.title,
+      opBody: threads.opBody,
+      format: threads.format,
+      isAutoCreated: threads.isAutoCreated,
+      category: threads.category,
+      staveFamilyId: threads.staveFamilyId,
+      staveSlug: staves.slug,
+      authorId: threads.authorId,
+      authorUsername: userProfiles.username,
+      voteScore: threads.voteScore,
+      commentsCount: threads.commentsCount,
+      createdAt: threads.createdAt,
+      lastActivityAt: threads.lastActivityAt,
+      tags: threads.tags,
+    })
+    .from(threads)
+    .leftJoin(userProfiles, eq(threads.authorId, userProfiles.userId))
+    .leftJoin(
+      staves,
+      and(eq(threads.staveFamilyId, staves.id), isNull(staves.deletedAt)),
+    )
+    .where(
+      and(
+        eq(threads.isPinned, true),
+        isNull(threads.deletedAt),
+        isNull(threads.staveFamilyId),
+      ),
+    )
+    .orderBy(desc(threads.lastActivityAt))
+    .limit(1);
+
+  const pinnedId = pinnedRows.length > 0 ? pinnedRows[0].id : null;
+
   // ---- build where conditions incrementally ----
   const conditions: ReturnType<typeof isNull>[] = [isNull(threads.deletedAt)];
+
+  // Exclude the pinned thread from the page rows on every page, so it never
+  // appears twice (rendered once from `pinned`, again from the feed).
+  if (pinnedId) {
+    conditions.push(ne(threads.id, pinnedId));
+  }
 
   // empty-thread filter
   if (!showEmpty) {
@@ -389,7 +466,7 @@ export async function getTavernIndexPage(
   } else if (surface === "standalone") {
     conditions.push(isNull(threads.staveFamilyId));
   }
-  // "following" with no viewerId → return nothing (handled by caller)
+  // "following" is handled by the early return above (not yet implemented).
 
   // category filter
   if (category) {
@@ -465,48 +542,12 @@ export async function getTavernIndexPage(
   const hasMore = rows.length > limit;
   const pageRows = hasMore ? rows.slice(0, limit) : rows;
 
-  // ---- pinned thread (global, stave-agnostic) ----
-  let pinned: ThreadFeedRow | null = null;
-  if (offset === 0) {
-    const pinnedRows = await db
-      .select({
-        id: threads.id,
-        slug: threads.slug,
-        title: threads.title,
-        opBody: threads.opBody,
-        format: threads.format,
-        isAutoCreated: threads.isAutoCreated,
-        category: threads.category,
-        staveFamilyId: threads.staveFamilyId,
-        staveSlug: staves.slug,
-        authorId: threads.authorId,
-        authorUsername: userProfiles.username,
-        voteScore: threads.voteScore,
-        commentsCount: threads.commentsCount,
-        createdAt: threads.createdAt,
-        lastActivityAt: threads.lastActivityAt,
-        tags: threads.tags,
-      })
-      .from(threads)
-      .leftJoin(userProfiles, eq(threads.authorId, userProfiles.userId))
-      .leftJoin(
-        staves,
-        and(eq(threads.staveFamilyId, staves.id), isNull(staves.deletedAt)),
-      )
-      .where(
-        and(
-          eq(threads.isPinned, true),
-          isNull(threads.deletedAt),
-          isNull(threads.staveFamilyId),
-        ),
-      )
-      .orderBy(desc(threads.lastActivityAt))
-      .limit(1);
-
-    if (pinnedRows.length > 0) {
-      pinned = toFeedRow(pinnedRows[0] as Parameters<typeof toFeedRow>[0]);
-    }
-  }
+  // Return the pinned row only on the first page (it's excluded from page rows
+  // above on every page).
+  const pinned =
+    offset === 0 && pinnedRows.length > 0
+      ? toFeedRow(pinnedRows[0] as Parameters<typeof toFeedRow>[0])
+      : null;
 
   return {
     threads: pageRows.map((r) => toFeedRow(r as Parameters<typeof toFeedRow>[0])),
@@ -863,8 +904,13 @@ export async function getAttachedStaveCard(
 }
 
 /**
- * Returns true if the viewer is the author of the stave family for
- * the given auto-thread.
+ * Returns true if the viewer is the author of the given auto-thread.
+ *
+ * Authorization is keyed on the thread's own `authorId` (set to the stave
+ * author when the thread is auto-created on publish), NOT on the current
+ * `staves.authorId`. Resolving ownership through the stave row would let a
+ * different account that later owns the referenced stave edit a thread it
+ * never created.
  */
 export async function canEditOpBody(
   viewerId: string,
@@ -874,6 +920,7 @@ export async function canEditOpBody(
 
   const threadRows = await db
     .select({
+      authorId: threads.authorId,
       staveFamilyId: threads.staveFamilyId,
       isAutoCreated: threads.isAutoCreated,
     })
@@ -885,12 +932,5 @@ export async function canEditOpBody(
   const thread = threadRows[0];
   if (!thread.isAutoCreated || !thread.staveFamilyId) return false;
 
-  const staveRows = await db
-    .select({ authorId: staves.authorId })
-    .from(staves)
-    .where(and(eq(staves.id, thread.staveFamilyId), isNull(staves.deletedAt)))
-    .limit(1);
-
-  if (staveRows.length === 0) return false;
-  return staveRows[0].authorId === viewerId;
+  return thread.authorId === viewerId;
 }

@@ -2,6 +2,7 @@ import { eq, isNull, and } from "drizzle-orm";
 
 import { getDbOptional } from "@/db";
 import { threads, threadComments } from "@/db/schema";
+import { enforceRateLimit } from "@/lib/rateLimitGuard";
 import { createClient } from "@/lib/supabase/server";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -14,6 +15,10 @@ export async function POST(req: Request, { params }: Ctx) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return new Response("Unauthorized", { status: 401 });
+
+  // Per-user throttle: max 20 comments per 10 minutes.
+  const limited = enforceRateLimit(`thread-comment:${user.id}`, 20, 600_000);
+  if (limited) return limited;
 
   const db = getDbOptional();
   if (!db) return new Response("DB unavailable", { status: 503 });

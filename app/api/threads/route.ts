@@ -12,7 +12,20 @@ export async function POST(req: Request) {
   const db = getDbOptional();
   if (!db) return new Response("DB unavailable", { status: 503 });
 
-  const body = await req.json();
+  let parsed: unknown;
+  try {
+    parsed = await req.json();
+  } catch {
+    return new Response("Invalid JSON", { status: 400 });
+  }
+  const body = (parsed ?? {}) as {
+    title?: string;
+    opBody?: string;
+    format?: string;
+    category?: string | null;
+    staveFamilyId?: string | null;
+    tags?: string | string[];
+  };
   const { title, opBody, format, category, staveFamilyId, tags } = body;
 
   // Parse tags from JSON string if needed

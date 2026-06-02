@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { getDbOptional } from "@/db";
 import { threads } from "@/db/schema";
@@ -29,7 +29,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
   await db
     .update(threads)
     .set({ opBody, opEditedAt: new Date(), lastActivityAt: new Date() })
-    .where(eq(threads.id, id));
+    .where(and(eq(threads.id, id), isNull(threads.deletedAt)));
 
   return Response.json({ ok: true });
 }
