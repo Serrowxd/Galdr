@@ -13,6 +13,7 @@ import {
 } from "@/lib/grimoires";
 import { clientIp, enforceRateLimit } from "@/lib/rateLimitGuard";
 import { isSafePath } from "@/lib/packageFileRules";
+import { getUserProfileByUserId } from "@/lib/profiles";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -106,6 +107,8 @@ export async function GET(request: Request, context: Ctx) {
   // Record the download before streaming begins (best-effort, counts the attempt).
   await recordGrimoireDownload(db, id, userId);
 
+  const authorProfile = await getUserProfileByUserId(db, grimoire.authorId);
+
   const root = grimoire.slug;
   const manifest = {
     grimoire: {
@@ -113,7 +116,7 @@ export async function GET(request: Request, context: Ctx) {
       title: grimoire.title,
       version: grimoire.version,
       license: grimoire.license,
-      author: grimoire.authorId,
+      author: authorProfile?.username ?? null,
       tags: grimoire.tags,
     },
     entries: included.map((r, i) => {
