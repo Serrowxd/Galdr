@@ -751,17 +751,15 @@ textarea {
   border-color: var(--hairline-strong);
 }
 
-/* Orchestration grimoires wear the purple edge so the registry feed signals an
-   executable workflow at a glance (matches the orchestration colour used on the
-   detail surface). */
+/* Orchestration grimoires wear a purple border edge (no fill) so the registry
+   feed signals an executable workflow at a glance — matches the orchestration
+   colour used on the detail surface. */
 .stave-card.is-orchestration {
-  border-color: color-mix(in srgb, var(--orchestration) 45%, var(--hairline));
-  background: color-mix(in srgb, var(--orchestration) 4%, var(--surface));
+  border-color: color-mix(in srgb, var(--orchestration) 55%, var(--hairline));
 }
 
 .stave-card.is-orchestration:hover {
-  border-color: color-mix(in srgb, var(--orchestration) 65%, var(--hairline-strong));
-  background: color-mix(in srgb, var(--orchestration) 7%, var(--surface-hover));
+  border-color: color-mix(in srgb, var(--orchestration) 75%, var(--hairline-strong));
 }
 
 /* Compact orchestration symbol chip — replaces the wide "orchestration" text
