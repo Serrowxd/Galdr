@@ -755,11 +755,12 @@ textarea {
    feed signals an executable workflow at a glance — matches the orchestration
    colour used on the detail surface. */
 .stave-card.is-orchestration {
-  border-color: color-mix(in srgb, var(--orchestration) 55%, var(--hairline));
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--orchestration) 80%, var(--hairline));
 }
 
 .stave-card.is-orchestration:hover {
-  border-color: color-mix(in srgb, var(--orchestration) 75%, var(--hairline-strong));
+  border-color: var(--orchestration);
 }
 
 /* Compact orchestration symbol chip — replaces the wide "orchestration" text
