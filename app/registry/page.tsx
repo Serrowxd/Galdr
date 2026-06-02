@@ -5,7 +5,12 @@ import {
 import { getDbOptional } from "@/db";
 import { listGrimoires, listSavedGrimoireIds } from "@/lib/grimoires";
 import { listSavedStaveIds } from "@/lib/staveEngagement";
-import { getTopScribes, getTrendingTags, listStaves } from "@/lib/staves";
+import {
+  getStaveBySlug,
+  getTopScribes,
+  getTrendingTags,
+  listStaves,
+} from "@/lib/staves";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +27,7 @@ type SearchParams = Promise<{
   sort?: string;
   type?: string;
   page?: string;
+  stave?: string;
 }>;
 
 export default async function RegistryPage({
@@ -43,9 +49,26 @@ export default async function RegistryPage({
   const q = sp.q?.trim() || undefined;
   const tag = sp.tag && sp.tag !== "all" ? sp.tag : undefined;
   const sort = sp.sort === "new" ? "new" : "top";
-  const type = sp.type === "stave" || sp.type === "grimoire" ? sp.type : "all";
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
   const offset = (page - 1) * LIMIT;
+
+  // "Found in grimoires → View all" deep-links here with ?stave=<slug>. Resolve it
+  // to a family id and constrain the grimoire pool to those that contain it. The
+  // filter forces the grimoires-only view (a stave can't "contain" a stave).
+  const staveSlug = sp.stave?.trim() || undefined;
+  let staveFilter: { slug: string; title: string; familyId: string } | null = null;
+  if (staveSlug) {
+    const s = await getStaveBySlug(db, staveSlug);
+    if (s && s.status === "published" && !s.private) {
+      staveFilter = { slug: s.slug, title: s.title, familyId: s.familyId };
+    }
+  }
+
+  const type = staveFilter
+    ? "grimoire"
+    : sp.type === "stave" || sp.type === "grimoire"
+      ? sp.type
+      : "all";
 
   const wantStaves = type !== "grimoire";
   const wantGrimoires = type !== "stave";
@@ -61,7 +84,15 @@ export default async function RegistryPage({
   const [staveResult, grimoireResult, trendingTags, topScribes, savedStaveIds, savedGrimoireIds] =
     await Promise.all([
       listStaves(db, { status: "published", q, tag, sort, limit: LIMIT, offset }),
-      listGrimoires(db, { status: "published", q, tag, sort, limit: LIMIT, offset }),
+      listGrimoires(db, {
+        status: "published",
+        q,
+        tag,
+        sort,
+        limit: LIMIT,
+        offset,
+        containsStaveFamily: staveFilter?.familyId,
+      }),
       getTrendingTags(db),
       getTopScribes(db),
       user ? listSavedStaveIds(db, user.id) : Promise.resolve<string[]>([]),
@@ -134,7 +165,8 @@ export default async function RegistryPage({
     if (q) params.set("q", q);
     if (tag) params.set("tag", tag);
     if (sort !== "top") params.set("sort", sort);
-    if (type !== "all") params.set("type", type);
+    if (staveFilter) params.set("stave", staveFilter.slug);
+    else if (type !== "all") params.set("type", type);
     if (n > 1) params.set("page", String(n));
     const qs = params.toString();
     return qs ? `/registry?${qs}` : "/registry";
@@ -154,6 +186,7 @@ export default async function RegistryPage({
           startRank={offset + 1}
           prevHref={page > 1 ? pageHref(page - 1) : null}
           nextHref={page < totalPages ? pageHref(page + 1) : null}
+          staveFilter={staveFilter ? { slug: staveFilter.slug, title: staveFilter.title } : null}
         />
       </div>
 

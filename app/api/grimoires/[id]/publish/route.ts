@@ -62,7 +62,11 @@ export async function POST(request: Request, context: Ctx) {
     // Body is optional.
   }
 
-  const slug = await generateUniqueGrimoireSlug(db, slugifyGrimoireTitle(grimoire.title));
+  const slug = await generateUniqueGrimoireSlug(
+    db,
+    slugifyGrimoireTitle(grimoire.title),
+    grimoire.id,
+  );
   const result = await publishGrimoire(db, grimoire, slug, releaseNotes);
 
   if (!result.ok) {

@@ -669,6 +669,86 @@ export async function listStaves(
   };
 }
 
+export type StaveStats = {
+  /** Lifetime downloads across the whole family. */
+  downloads: number;
+  /** Library saves across the family (the engagement signal on this surface). */
+  saves: number;
+  /**
+   * Open Tavern threads on this family. The `threads` table arrives with spec 09;
+   * until then this is always 0 (the Discussion tab is an empty slot — spec 10).
+   */
+  openThreads: number;
+  /** Most recent published_at in the family. */
+  lastPublishedAt: Date | null;
+};
+
+/**
+ * Aggregate stats for the stave detail surface (spec 08). Family-wide so the
+ * figures are stable across versions. Downloads are lifetime. The engagement
+ * count is library *saves* (votes live on Tavern threads, not the stave page).
+ * `openThreads` is hard-zero until the Tavern schema (spec 09) lands.
+ */
+export async function getStaveStats(
+  db: GaldrDb,
+  familyId: string,
+): Promise<StaveStats> {
+  const result = await db.execute(sql`
+    SELECT
+      (SELECT COUNT(*) FROM stave_downloads d
+         JOIN staves sf ON sf.id = d.stave_id
+        WHERE sf.family_id = ${familyId}) AS downloads,
+      (SELECT COUNT(*) FROM saved_staves ss
+         JOIN staves sf ON sf.id = ss.stave_id
+        WHERE sf.family_id = ${familyId}) AS saves,
+      (SELECT MAX(published_at) FROM staves
+        WHERE family_id = ${familyId}
+          AND status = 'published'
+          AND deleted_at IS NULL) AS last_published_at
+  `);
+  const row = (result as unknown as {
+    downloads: number | string;
+    saves: number | string;
+    last_published_at: Date | string | null;
+  }[])[0];
+  return {
+    downloads: Number(row?.downloads ?? 0),
+    saves: Number(row?.saves ?? 0),
+    openThreads: 0,
+    lastPublishedAt: row?.last_published_at
+      ? new Date(row.last_published_at)
+      : null,
+  };
+}
+
+/** Maintainer-card summary: the scribe's published stave count + total saves. */
+export async function getScribeStats(
+  db: GaldrDb,
+  authorId: string,
+): Promise<{ staveCount: number; saves: number }> {
+  const result = await db.execute(sql`
+    SELECT
+      (SELECT COUNT(*) FROM staves
+        WHERE author_id = ${authorId}
+          AND status = 'published'
+          AND private = false
+          AND deleted_at IS NULL) AS stave_count,
+      (SELECT COUNT(*)
+         FROM saved_staves ss
+         JOIN staves s ON s.id = ss.stave_id
+        WHERE s.author_id = ${authorId}
+          AND s.deleted_at IS NULL) AS saves
+  `);
+  const row = (result as unknown as {
+    stave_count: number | string;
+    saves: number | string;
+  }[])[0];
+  return {
+    staveCount: Number(row?.stave_count ?? 0),
+    saves: Number(row?.saves ?? 0),
+  };
+}
+
 export async function getTrendingTags(
   db: GaldrDb,
   limit = 10,

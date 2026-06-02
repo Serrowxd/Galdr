@@ -316,7 +316,18 @@ function LoomEditor() {
   // Hydrate an owned draft from ?id=. Skip the row we just created ourselves
   // (replaceState sets the param but state is already current).
   useEffect(() => {
-    if (!idParam || idParam === draftId) return;
+    // No stave targeted by the URL: clear any "loaded stave" artifacts so a stale
+    // published-lock / load-error / fork banner from a previously opened stave
+    // doesn't linger after navigating to a blank /loom. Same-route SPA nav keeps
+    // this component mounted, so these don't reset on their own. We deliberately
+    // leave the editor content and draftId alone so in-progress work survives.
+    if (!idParam) {
+      setPublishedLock(null);
+      setLoadError(null);
+      setForkBanner(null);
+      return;
+    }
+    if (idParam === draftId) return;
     let cancelled = false;
     setLoadError(null);
     setPublishedLock(null);

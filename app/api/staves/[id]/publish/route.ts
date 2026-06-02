@@ -72,7 +72,7 @@ export async function POST(request: Request, context: Ctx) {
     // Body is optional — ignore absent/invalid JSON.
   }
 
-  const slug = await generateUniqueSlug(db, slugifyTitle(stave.title));
+  const slug = await generateUniqueSlug(db, slugifyTitle(stave.title), stave.id);
   await publishStave(db, id, slug, releaseNotes, isPrivate);
 
   return NextResponse.json({ slug });

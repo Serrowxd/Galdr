@@ -2336,6 +2336,585 @@ textarea {
 }
 
 /* =====================================================================
+ * Stave detail page — spec 08 surface (header + tabs + right rail)
+ * ===================================================================== */
+
+/* The detail surface runs wider than the default container so the Files tab can
+ * hold tree + viewer alongside the 300px right rail without crowding. */
+.container.stave-detail-page {
+  max-width: 1360px;
+}
+
+.stave08 {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 56px;
+}
+
+/* --- Header ---------------------------------------------------------- */
+.stave08-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding-bottom: 20px;
+  border-bottom: 0.5px solid var(--hairline);
+}
+
+.stave08-titleblock {
+  flex: 1;
+  min-width: 0;
+}
+
+.stave08-title {
+  font-size: 26px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  word-break: break-word;
+}
+
+.stave08-title .at {
+  color: var(--accent);
+}
+
+.stave08-slug {
+  font-family: var(--font-mono-app), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--text-soft);
+  margin-top: 4px;
+}
+
+.stave08-subline {
+  color: var(--text-muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+  margin: 8px 0 14px;
+  max-width: 720px;
+}
+
+.stave08-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.stave08-meta-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.stave08-meta-label a {
+  color: var(--accent);
+}
+
+.stave08-meta-label a:hover {
+  text-decoration: underline;
+}
+
+.stave08-ver {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  border: 0.5px solid var(--accent-border-soft);
+  border-radius: var(--radius-sm);
+  padding: 1px 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stave08-actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.stave08-actionrow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.stave08-statsmini {
+  display: flex;
+  gap: 22px;
+}
+
+.stave08-statsmini .s {
+  text-align: right;
+}
+
+.stave08-statsmini .n {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.stave08-statsmini .l {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+/* --- Tab bar --------------------------------------------------------- */
+.stave08-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 0.5px solid var(--hairline);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.stave08-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.stave08-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.stave08-tab:hover {
+  color: var(--text);
+}
+
+.stave08-tab.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.stave08-tab-badge {
+  font-size: 11px;
+  padding: 0 6px;
+  color: var(--text-secondary);
+  background: var(--surface-alt);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Orchestration tab — tinted purple (the spec-07 orchestration colour) so the
+ * execution surface stands apart from the gold-accent tabs and is easy to find. */
+.stave08-tab.is-orchestration {
+  color: color-mix(in srgb, var(--orchestration) 70%, var(--text-muted));
+}
+
+.stave08-tab.is-orchestration:hover {
+  color: var(--orchestration);
+}
+
+.stave08-tab.is-orchestration.is-active {
+  color: var(--orchestration);
+  border-bottom-color: var(--orchestration);
+}
+
+/* Orchestration tab — "planned feature" placeholder body. */
+.grimoire-orch-planned {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 56px 24px;
+  border: 0.5px dashed color-mix(in srgb, var(--orchestration) 35%, var(--hairline));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--orchestration) 5%, var(--surface));
+}
+
+.grimoire-orch-planned svg {
+  color: var(--orchestration);
+}
+
+.grimoire-orch-planned .grimoire-orch-planned-title {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--orchestration);
+}
+
+.grimoire-orch-planned p {
+  max-width: 440px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* --- Grimoire Files inspector ---------------------------------------------
+ * Reuses the stave package inspector (tree + markdown viewer), with two
+ * grimoire-only affordances: a selectable immutable STAVES folder that opens
+ * the vertical stave view, and a purple orchestration.md file. */
+
+/* The STAVES folder is immutable but clickable (it opens the stave view),
+ * unlike a plain package folder which is just a label. */
+.stave-tree-folder.is-selectable {
+  cursor: pointer;
+}
+
+.stave-tree-folder.is-selectable:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+
+.stave-tree-folder.is-active {
+  background: var(--accent-tint-12);
+  color: var(--accent);
+}
+
+/* The immutable STAVES folder carries a small lock so its read-only nature
+ * reads at a glance in the editor's file tree. */
+.stave-tree-lock {
+  margin-left: auto;
+  color: var(--text-faint);
+}
+
+/* orchestration.md — purple, so the execution file is easy to spot in the tree. */
+.stave-tree-file.is-orchestration {
+  color: color-mix(in srgb, var(--orchestration) 72%, var(--text-muted));
+}
+
+.stave-tree-file.is-orchestration:hover {
+  color: var(--orchestration);
+}
+
+.stave-tree-file.is-orchestration.is-active {
+  color: var(--orchestration);
+  background: color-mix(in srgb, var(--orchestration) 14%, transparent);
+}
+
+/* Pinned orchestration item at the top of the vertical stave view — a purple,
+ * clickable banner that jumps to the orchestration.md file. */
+.grimoire-orch-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 11px 13px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--orchestration);
+  background: color-mix(in srgb, var(--orchestration) 9%, var(--surface));
+  border: 0.5px solid color-mix(in srgb, var(--orchestration) 30%, var(--hairline));
+  border-radius: var(--radius-md);
+  transition: background-color 120ms ease;
+}
+
+.grimoire-orch-entry:hover {
+  background: color-mix(in srgb, var(--orchestration) 15%, var(--surface));
+}
+
+.grimoire-orch-entry svg {
+  flex: none;
+}
+
+.grimoire-orch-entry .grimoire-orch-entry-sub {
+  color: color-mix(in srgb, var(--orchestration) 55%, var(--text-muted));
+  font-size: 11.5px;
+}
+
+/* --- Body grid (content + rail, matching the app's .col-grid) -------- */
+.stave08-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 24px;
+  align-items: start;
+  padding-top: 4px;
+}
+
+@media (max-width: 920px) {
+  .stave08-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stave08-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* --- Tab body panels ------------------------------------------------- */
+.stave08-panel {
+  background: var(--surface);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.stave08-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 0.5px solid var(--hairline);
+  background: var(--surface-sunken);
+}
+
+.stave08-panel-body {
+  padding: 16px 18px;
+}
+
+.stave08-readme {
+  padding: 4px;
+}
+
+.stave08-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 28px 4px;
+}
+
+/* Files tab — package tree extras (sizes + entrypoint badge) */
+.stave08-file-size {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.stave08-ep-badge {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 0.5px solid var(--accent-border-soft);
+  border-radius: var(--radius-sm);
+  padding: 0 5px;
+}
+
+/* Files-tab hierarchy guides — vertical rails + elbow connectors per nested
+ * level, mirroring the Loom explorer so the tree reads the same everywhere
+ * (a flat package just has no nested level to draw). */
+.stave-tree-panel .stave-tree-list .stave-tree-list {
+  position: relative;
+  margin-left: 10px;
+  padding-left: 12px;
+  border-left: 0.5px solid var(--hairline);
+}
+
+.stave-tree-panel .stave-tree-list .stave-tree-list > li {
+  position: relative;
+}
+
+.stave-tree-panel .stave-tree-list .stave-tree-list > li::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 14px;
+  width: 10px;
+  height: 1px;
+  background: var(--hairline);
+}
+
+/* Forks / Versions rows */
+.stave08-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.stave08-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 4px;
+  border-bottom: 0.5px solid var(--hairline-soft);
+}
+
+.stave08-list li:last-child {
+  border-bottom: 0;
+}
+
+.stave08-list-main {
+  min-width: 0;
+}
+
+.stave08-list-main a {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.stave08-list-main a:hover {
+  color: var(--accent);
+}
+
+.stave08-list-sub {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin-top: 3px;
+}
+
+.stave08-list-aside {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* Maintainer card */
+.stave08-maint {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.stave08-avatar {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--accent-alt);
+  color: #1e1e1e;
+  font-size: 12px;
+  font-weight: 600;
+  object-fit: cover;
+}
+
+.stave08-maint-name {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.stave08-maint-name:hover {
+  color: var(--accent);
+}
+
+.stave08-maint-sub {
+  font-size: 11.5px;
+  color: var(--text-soft);
+  margin-top: 1px;
+}
+
+/* Found-in-grimoires rows */
+.stave08-grim-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.stave08-grim-row a {
+  color: var(--accent);
+  font-size: 12.5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stave08-grim-row a:hover {
+  text-decoration: underline;
+}
+
+/* File viewer dialog (Files tab) */
+.stave08-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.stave08-dialog {
+  width: 100%;
+  max-width: 760px;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 0.5px solid var(--hairline-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.stave08-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--hairline);
+  background: var(--surface-sunken);
+}
+
+.stave08-dialog-path {
+  font-family: var(--font-mono-app), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.stave08-dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Registry "grimoires containing <stave>" filter banner (from Found-in-grimoires) */
+.reg-b-stave-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--accent-tint-07);
+  border: 0.5px solid var(--accent-border-soft);
+  border-radius: var(--radius-md);
+}
+
+.reg-b-stave-filter strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* "View all" link under the Found-in-grimoires rail panel */
+.stave08-viewall {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.stave08-viewall:hover {
+  text-decoration: underline;
+}
+
+/* =====================================================================
  * Sign-in
  * ===================================================================== */
 
